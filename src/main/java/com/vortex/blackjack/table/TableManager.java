@@ -10,9 +10,12 @@ import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
 import org.bukkit.block.data.type.Stairs;
 import org.bukkit.configuration.ConfigurationSection;
+import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -30,9 +33,61 @@ public class TableManager {
     }
 
     /**
+     * Purges any leftover or orphan entities from previous server sessions.
+     */
+    public void purgeAllOrphanEntities() {
+        for (World world : Bukkit.getWorlds()) {
+            for (Entity entity : world.getEntities()) {
+                Set<String> tags = entity.getScoreboardTags();
+                if (tags.contains("blackjack-entity") || tags.contains("blackjack-card") || tags.contains("blackjack-seat")) {
+                    entity.remove();
+                }
+            }
+        }
+    }
+
+    /**
+     * Normalizes a table location so that:
+     * - X and Z are centered on the nearest block (+0.5)
+     * - Y is the block level
+     * - Yaw is always 180.0f (facing North)
+     * - Pitch is always 0.0f (level)
+     */
+    public static Location normalizeLocation(Location loc) {
+        if (loc == null || loc.getWorld() == null) return loc;
+        return new Location(
+                loc.getWorld(),
+                loc.getBlockX() + 0.5,
+                loc.getBlockY(),
+                loc.getBlockZ() + 0.5,
+                180.0f,
+                0.0f
+        );
+    }
+
+    /**
      * Load tables from configuration on startup
      */
     public void loadTablesFromConfig() {
+        // Clean any leftover orphan entities before recreating tables
+        purgeAllOrphanEntities();
+
+        if (plugin.getDatabaseManager() != null) {
+            List<com.vortex.blackjack.database.TableRecord> dbTables = plugin.getDatabaseManager().loadAllTables();
+            if (!dbTables.isEmpty()) {
+                for (com.vortex.blackjack.database.TableRecord record : dbTables) {
+                    Location loc = record.toLocation();
+                    if (loc == null) {
+                        plugin.getLogger().warning("World not found for table ID: " + record.getId() + " (" + record.getWorld() + ")");
+                        continue;
+                    }
+                    createTable(loc, record.toTableSettings(), false);
+                }
+                plugin.getLogger().info("Loaded " + tables.size() + " blackjack tables from database (" + plugin.getDatabaseManager().getDatabaseType() + ")");
+                return;
+            }
+        }
+
         if (!plugin.getConfig().contains("tables")) {
             return;
         }
@@ -55,7 +110,7 @@ public class TableManager {
                     int z = Integer.parseInt(parts[2]);
 
                     TableSettings settings = loadSettingsFromConfig(worldSection, locString);
-                    Location loc = new Location(world, x, y, z);
+                    Location loc = new Location(world, x + 0.5, y, z + 0.5, 180.0f, 0.0f);
                     createTable(loc, settings, false); // Don't save to config again
                 } catch (NumberFormatException e) {
                     plugin.getLogger().warning("Invalid table location format: " + locString);
@@ -81,79 +136,84 @@ public class TableManager {
     }
 
     private boolean createTable(Location centerLoc, TableSettings settings, boolean saveToConfig) {
-        // Check if table already exists at this location
+        if (centerLoc == null || centerLoc.getWorld() == null) return false;
+
+        Location normLoc = normalizeLocation(centerLoc);
+
+        // Check if table already exists at this location or block
         for (Location loc : tables.keySet()) {
-            if (loc.equals(centerLoc)) {
+            if (loc.getWorld().equals(normLoc.getWorld()) && loc.distanceSquared(normLoc) < 1.0) {
                 return false; // Table already exists
             }
         }
 
-        World world = centerLoc.getWorld();
-        if (world == null) return false;
-
-        int centerX = centerLoc.getBlockX();
-        int centerY = centerLoc.getBlockY();
-        int centerZ = centerLoc.getBlockZ();
+        World world = normLoc.getWorld();
 
         // Ensure chunk is loaded
-        world.getChunkAt(centerLoc).load();
-
-        Material tableMaterial = configManager.getTableMaterial();
-        Material chairMaterial = configManager.getChairMaterial();
-
-        // Create table blocks (3x3 hollow square)
-        for (int x = -1; x <= 1; x++) {
-            for (int z = -1; z <= 1; z++) {
-                if (x != 0 || z != 0) { // Don't place block in center
-                    Location blockLoc = new Location(world, centerX + x, centerY, centerZ + z);
-                    blockLoc.getBlock().setType(tableMaterial);
-                }
-            }
-        }
-
-        // Place chairs at cardinal directions
-        placeStair(world, centerX + 2, centerY, centerZ, BlockFace.EAST, chairMaterial);
-        placeStair(world, centerX - 2, centerY, centerZ, BlockFace.WEST, chairMaterial);
-        placeStair(world, centerX, centerY, centerZ + 2, BlockFace.SOUTH, chairMaterial);
-        placeStair(world, centerX, centerY, centerZ - 2, BlockFace.NORTH, chairMaterial);
+        world.getChunkAt(normLoc).load();
 
         // Save to config if requested
         if (saveToConfig) {
-            saveTableToConfig(centerLoc, settings);
+            saveTableToConfig(normLoc, settings);
         }
 
-        // Create table object
-        BlackjackTable table = new BlackjackTable(plugin, this, configManager, centerLoc, settings);
-        tables.put(centerLoc, table);
+        // Create table object (spawns 3D casino table model and Roulette-style chairs)
+        BlackjackTable table = new BlackjackTable(plugin, this, configManager, normLoc, settings);
+        tables.put(normLoc, table);
 
         return true;
     }
 
-    private void placeStair(World world, int x, int y, int z, BlockFace facing, Material material) {
-        Block block = world.getBlockAt(x, y, z);
-        block.setType(material);
-        if (block.getBlockData() instanceof Stairs stairs) {
-            stairs.setFacing(facing);
-            block.setBlockData(stairs);
+    /**
+     * Get a table by its unique table id string.
+     */
+    public BlackjackTable getTableById(String id) {
+        for (BlackjackTable table : tables.values()) {
+            if (table.getTableId().equals(id)) {
+                return table;
+            }
         }
+        return null;
     }
 
     /**
      * Remove a table at the specified location
      */
     public boolean removeTable(Location tableLoc) {
-        BlackjackTable table = tables.remove(tableLoc);
+        if (tableLoc == null) return false;
+        Location normLoc = normalizeLocation(tableLoc);
+
+        BlackjackTable table = tables.remove(normLoc);
+        if (table == null) {
+            table = tables.remove(tableLoc);
+        }
+        if (table == null) {
+            // Try searching by nearest table within 1 block
+            for (Map.Entry<Location, BlackjackTable> entry : tables.entrySet()) {
+                if (entry.getKey().getWorld().equals(tableLoc.getWorld()) && entry.getKey().distanceSquared(tableLoc) < 1.0) {
+                    normLoc = entry.getKey();
+                    table = tables.remove(normLoc);
+                    break;
+                }
+            }
+        }
         if (table == null) return false;
 
         // Remove all players from the table
         table.removeAllPlayers();
         table.cleanup();
 
+        // Remove from database
+        if (plugin.getDatabaseManager() != null) {
+            String id = normLoc.getWorld().getName() + "_" + normLoc.getBlockX() + "_" + normLoc.getBlockY() + "_" + normLoc.getBlockZ();
+            plugin.getDatabaseManager().deleteTable(id);
+        }
+
         // Remove from config
-        String worldName = tableLoc.getWorld().getName();
-        int centerX = tableLoc.getBlockX();
-        int centerY = tableLoc.getBlockY();
-        int centerZ = tableLoc.getBlockZ();
+        String worldName = normLoc.getWorld().getName();
+        int centerX = normLoc.getBlockX();
+        int centerY = normLoc.getBlockY();
+        int centerZ = normLoc.getBlockZ();
 
         if (plugin.getConfig().contains("tables." + worldName)) {
             ConfigurationSection tablesSection = plugin.getConfig().getConfigurationSection("tables." + worldName);
@@ -214,7 +274,7 @@ public class TableManager {
      * Remove player from any table they're at
      */
     public void removePlayerFromTable(Player player) {
-        removePlayerFromTable(player, "left the table");
+        removePlayerFromTable(player, configManager.getLeaveReason("normal"));
     }
 
     /**
@@ -238,6 +298,7 @@ public class TableManager {
      * Persist updated settings for an existing table (used by /bj settable).
      */
     public void saveTableSettings(BlackjackTable table) {
+        table.initChairs();
         saveTableToConfig(table.getCenterLocation(), table.getSettings());
     }
 
@@ -262,6 +323,11 @@ public class TableManager {
     }
 
     private void saveTableToConfig(Location loc, TableSettings settings) {
+        if (plugin.getDatabaseManager() != null) {
+            com.vortex.blackjack.database.TableRecord record = com.vortex.blackjack.database.TableRecord.fromLocationAndSettings(loc, settings);
+            plugin.getDatabaseManager().saveTable(record);
+        }
+
         String path = buildTablePath(loc);
         if (settings.getRawMinBet() == null && settings.getRawMaxBet() == null
                 && settings.getRawMaxPlayers() == null

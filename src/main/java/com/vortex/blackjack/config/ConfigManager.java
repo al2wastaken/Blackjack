@@ -8,6 +8,10 @@ import org.bukkit.Registry;
 import org.bukkit.Sound;
 import org.bukkit.configuration.file.FileConfiguration;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
 /**
  * Centralized configuration management with validation and caching
  */
@@ -26,6 +30,14 @@ public class ConfigManager {
     private boolean soundsEnabled;
     private boolean particlesEnabled;
     private boolean hitSoft17;
+    
+    // Table styling (Roulette-style 3D models and chairs)
+    private String woodType;
+    private String feltColor;
+    private String chairCushionColor;
+    private Sound chairSitSound;
+    private boolean tableHologramEnabled;
+    private String tableHologramTitle;
     
     public ConfigManager(FileConfiguration config, FileConfiguration messagesConfig) {
         this.config = config;
@@ -62,6 +74,22 @@ public class ConfigManager {
         } catch (IllegalArgumentException e) {
             chairMaterial = Material.DARK_OAK_STAIRS;
         }
+
+        // Table styling (Roulette-style 3D models and chairs)
+        woodType = config.getString("table.wood-type", "DARK_OAK").toUpperCase();
+        feltColor = config.getString("table.felt-color", "GREEN").toUpperCase();
+        chairCushionColor = config.getString("table.chair-cushion-color", "RED").toUpperCase();
+
+        String sitSoundStr = config.getString("table.sounds.sit", "BLOCK_WOODEN_TRAPDOOR_CLOSE");
+        try {
+            chairSitSound = Sound.valueOf(sitSoundStr);
+        } catch (IllegalArgumentException e) {
+            chairSitSound = Sound.BLOCK_WOODEN_TRAPDOOR_CLOSE;
+        }
+
+        tableHologramEnabled = config.getBoolean("table.hologram.enabled", true);
+        tableHologramTitle = ChatColor.translateAlternateColorCodes('&', 
+                config.getString("table.hologram.title", "&6&lBLACKJACK"));
         
         // Audio/visual settings
         soundsEnabled = config.getBoolean("sounds.enabled", true);
@@ -79,6 +107,54 @@ public class ConfigManager {
     public int getMaxPlayers() { return maxPlayers; }
     public Material getTableMaterial() { return tableMaterial; }
     public Material getChairMaterial() { return chairMaterial; }
+    public String getWoodType() { return woodType; }
+    public String getFeltColor() { return feltColor; }
+    public String getChairCushionColor() { return chairCushionColor; }
+
+    public Material getWoodPlanks() {
+        try {
+            return Material.valueOf(woodType + "_PLANKS");
+        } catch (IllegalArgumentException e) {
+            return Material.DARK_OAK_PLANKS;
+        }
+    }
+
+    public Material getWoodSlab() {
+        try {
+            return Material.valueOf(woodType + "_SLAB");
+        } catch (IllegalArgumentException e) {
+            return Material.DARK_OAK_SLAB;
+        }
+    }
+
+    public Material getFeltMaterial() {
+        try {
+            return Material.valueOf(feltColor + "_WOOL");
+        } catch (IllegalArgumentException e) {
+            return Material.GREEN_WOOL;
+        }
+    }
+
+    public Material getChairCushionMaterial() {
+        try {
+            return Material.valueOf(chairCushionColor + "_CARPET");
+        } catch (IllegalArgumentException e) {
+            return Material.RED_CARPET;
+        }
+    }
+
+    public Sound getChairSitSound() {
+        return chairSitSound;
+    }
+
+    public boolean isTableHologramEnabled() {
+        return tableHologramEnabled;
+    }
+
+    public String getTableHologramTitle() {
+        return tableHologramTitle;
+    }
+    
     public boolean areSoundsEnabled() { return soundsEnabled; }
     public boolean areParticlesEnabled() { return particlesEnabled; }
     public boolean shouldHitSoft17() { return hitSoft17; }
@@ -217,6 +293,121 @@ public class ConfigManager {
             }
         }
         return message;
+    }
+
+    public List<String> getMessageList(String path, List<String> defaultList) {
+        List<String> list = messagesConfig.contains(path) ? messagesConfig.getStringList(path) : null;
+        if (list == null || list.isEmpty()) {
+            list = defaultList;
+        }
+        if (list == null) return Collections.emptyList();
+        List<String> colored = new ArrayList<>(list.size());
+        for (String s : list) {
+            colored.add(ChatColor.translateAlternateColorCodes('&', s));
+        }
+        return colored;
+    }
+
+    public List<String> formatMessageList(String path, List<String> defaultList, Object... args) {
+        List<String> list = getMessageList(path, defaultList);
+        List<String> formatted = new ArrayList<>(list.size());
+        for (String line : list) {
+            String s = line;
+            for (int i = 0; i < args.length; i += 2) {
+                if (i + 1 < args.length) {
+                    s = s.replace("%" + args[i] + "%", String.valueOf(args[i + 1]));
+                }
+            }
+            formatted.add(s);
+        }
+        return formatted;
+    }
+
+    // -------------------------------------------------------------------------
+    // Feature Toggles (config.yml -> features.*)
+    // -------------------------------------------------------------------------
+
+    public boolean isFeatureEnabled(String featureName, boolean defaultValue) {
+        return config.getBoolean("features." + featureName, defaultValue);
+    }
+
+    public boolean isLeaveConfirmGuiEnabled() {
+        return isFeatureEnabled("leave-confirm-gui", true);
+    }
+
+    public boolean isDoubleDownEnabled() {
+        return isFeatureEnabled("double-down", true);
+    }
+
+    public boolean isQuickBetsEnabled() {
+        return isFeatureEnabled("quick-bets", true);
+    }
+
+    public boolean isInteractiveChatButtonsEnabled() {
+        return isFeatureEnabled("interactive-chat-buttons", true);
+    }
+
+    public boolean isChairSittingEnabled() {
+        return isFeatureEnabled("chair-sitting", true);
+    }
+
+    public boolean isAutoLeaveInactivityEnabled() {
+        return isFeatureEnabled("auto-leave-inactivity", true);
+    }
+
+    public boolean isAutoLeaveDistanceEnabled() {
+        return isFeatureEnabled("auto-leave-distance", true);
+    }
+
+    public boolean isStatsTrackerEnabled() {
+        return isFeatureEnabled("stats-tracker", true);
+    }
+
+    public boolean isVersionCheckerEnabled() {
+        return isFeatureEnabled("version-checker", true);
+    }
+
+    // -------------------------------------------------------------------------
+    // Hologram & Broadcast Templates (messages.yml)
+    // -------------------------------------------------------------------------
+
+    public String getHologramStatusInProgress() {
+        return getMessage("hologram.status-in-progress");
+    }
+
+    public String getHologramStatusReady() {
+        return getMessage("hologram.status-ready");
+    }
+
+    public String getHologramMinBet(int minBet) {
+        return formatMessage("hologram.min-bet", "min_bet", minBet);
+    }
+
+    public String getHologramMaxBet(int maxBet) {
+        return formatMessage("hologram.max-bet", "max_bet", maxBet);
+    }
+
+    public String getHologramPlayers(int current, int max) {
+        return formatMessage("hologram.players", "current", current, "max", max);
+    }
+
+    public String getHologramHint() {
+        return getMessage("hologram.hint");
+    }
+
+    public String getLeaveReason(String key) {
+        return getMessage("reasons." + key);
+    }
+
+    public String getDealerPrefix() {
+        return getMessage("dealer-prefix");
+    }
+
+    public String formatDealerHandBroadcast(String handDisplay, String valueDisplay) {
+        return formatMessage("dealer-hand-broadcast",
+                "dealer_prefix", getDealerPrefix(),
+                "hand", handDisplay,
+                "value", valueDisplay);
     }
 
     public void reload(FileConfiguration newConfig, FileConfiguration newMessagesConfig) {

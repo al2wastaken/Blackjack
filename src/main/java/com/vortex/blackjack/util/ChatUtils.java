@@ -49,6 +49,12 @@ public class ChatUtils {
      * Create a game action bar with clickable options
      */
     public void sendGameActionBar(Player player, boolean showDoubleDown) {
+        if (!configManager.isInteractiveChatButtonsEnabled()) {
+            player.sendMessage(configManager.getGameActionPrompt() + "(/bj hit, /bj stand" 
+                + (showDoubleDown && configManager.isDoubleDownEnabled() ? ", /bj doubledown" : "") + ")");
+            return;
+        }
+
         TextComponent hitButton = GenericUtils.createClickableButton(
             configManager.getButtonText("hit"), 
             configManager.getButtonCommand("hit"), 
@@ -67,8 +73,8 @@ public class ChatUtils {
         fullMessage.addExtra(separator);
         fullMessage.addExtra(standButton);
         
-        // Add doubledown button if appropriate
-        if (showDoubleDown) {
+        // Add doubledown button if appropriate and enabled
+        if (showDoubleDown && configManager.isDoubleDownEnabled()) {
             TextComponent doubleDownButton = GenericUtils.createClickableButton(
                 configManager.getButtonText("double-down"), 
                 configManager.getButtonCommand("double-down"), 
@@ -84,6 +90,11 @@ public class ChatUtils {
      * Create betting options with clickable amounts (configurable)
      */
     public void sendBettingOptions(Player player) {
+        if (!configManager.isQuickBetsEnabled()) {
+            player.sendMessage(configManager.getMessage("bet-usage"));
+            return;
+        }
+
         player.sendMessage(configManager.getMessage("quick-bet-border"));
         player.sendMessage(configManager.getMessage("quick-bet-title"));
         player.sendMessage("");
@@ -120,6 +131,10 @@ public class ChatUtils {
      * Send clickable "Play Again" and "Leave Table" buttons
      */
     public void sendGameEndOptions(Player player) {
+        if (!configManager.isInteractiveChatButtonsEnabled()) {
+            return;
+        }
+
         TextComponent playAgainButton = GenericUtils.createClickableButton(
             configManager.getButtonText("play-again"), 
             configManager.getButtonCommand("play-again"), 

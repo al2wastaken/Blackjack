@@ -3,6 +3,7 @@ package com.vortex.blackjack;
 import com.vortex.blackjack.commands.CommandManager;
 import com.vortex.blackjack.config.ConfigFileUpdater;
 import com.vortex.blackjack.config.ConfigManager;
+import com.vortex.blackjack.database.DatabaseManager;
 import com.vortex.blackjack.economy.EconomyProvider;
 import com.vortex.blackjack.economy.VaultEconomyProvider;
 import com.vortex.blackjack.integration.BlackjackPlaceholderExpansion;
@@ -13,6 +14,7 @@ import com.vortex.blackjack.table.TableSettings;
 import com.vortex.blackjack.util.AsyncUtils;
 import com.vortex.blackjack.util.GenericUtils;
 import com.vortex.blackjack.util.VersionChecker;
+import org.bukkit.Location;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.file.FileConfiguration;
@@ -47,6 +49,7 @@ public class BlackjackPlugin extends JavaPlugin implements Listener {
     private CommandManager commandManager;
     private AsyncUtils asyncUtils;
     private EconomyProvider economyProvider;
+    private DatabaseManager databaseManager;
     
     // GSit integration
     private boolean gSitEnabled = false;
@@ -84,6 +87,16 @@ public class BlackjackPlugin extends JavaPlugin implements Listener {
         
         configManager = new ConfigManager(getConfig(), messagesConfig);
         
+        // Initialize DatabaseManager
+        databaseManager = new DatabaseManager(this, configManager);
+        try {
+            databaseManager.initialize();
+            databaseManager.migrateLegacyData(new File(getDataFolder(), "config.yml"), new File(getDataFolder(), "stats.yml"));
+        } catch (Exception e) {
+            getLogger().severe("Failed to initialize database: " + e.getMessage());
+            e.printStackTrace();
+        }
+        
         // Initialize core managers
         tableManager = new TableManager(this, configManager);
         commandManager = new CommandManager(this);
@@ -105,13 +118,8 @@ public class BlackjackPlugin extends JavaPlugin implements Listener {
             return;
         }
         
-        // Check for GSit integration
-        if (getServer().getPluginManager().getPlugin("GSit") != null) {
-            gSitEnabled = true;
-            getLogger().info("GSit found! Players will automatically sit when joining tables.");
-        } else {
-            getLogger().info("GSit not found. Players will not automatically sit when joining tables.");
-        }
+        // Native Roulette-style sitting system
+        getLogger().info("Roulette-style 3D table models and native ArmorStand chair seating enabled!");
         
         // Check for PlaceholderAPI integration
         if (getServer().getPluginManager().getPlugin("PlaceholderAPI") != null) {
@@ -127,6 +135,7 @@ public class BlackjackPlugin extends JavaPlugin implements Listener {
         
         // Register events
         getServer().getPluginManager().registerEvents(this, this);
+        getServer().getPluginManager().registerEvents(new com.vortex.blackjack.listener.TableInteractListener(this, tableManager), this);
         
         // Register command prefix aliases: /blackjack and /bj
         commandManager.registerCommands();
@@ -134,8 +143,10 @@ public class BlackjackPlugin extends JavaPlugin implements Listener {
         // Load tables from config
         tableManager.loadTablesFromConfig();
         
-        // Start version checking
-        versionChecker.checkForUpdates();
+        // Start version checking if enabled
+        if (configManager.isVersionCheckerEnabled()) {
+            versionChecker.checkForUpdates();
+        }
         
         // Schedule periodic stats saving - configurable interval
         int statsSaveInterval = configManager.getStatsSaveInterval();
@@ -167,6 +178,11 @@ public class BlackjackPlugin extends JavaPlugin implements Listener {
         // Save player stats
         savePlayerStats();
         
+        // Close database pool
+        if (databaseManager != null) {
+            databaseManager.close();
+        }
+        
         getLogger().info("Blackjack plugin disabled!");
     }
     
@@ -183,160 +199,164 @@ public class BlackjackPlugin extends JavaPlugin implements Listener {
             
             // Add all the default messages
             messagesConfig.set("prefix", "&8[&6Blackjack&8] &r");
-            messagesConfig.set("no-permission", "&cYou don't have permission to do that!");
-            messagesConfig.set("player-only-command", "&cThis command can only be used by players!");
+            messagesConfig.set("no-permission", "&cBu işlemi yapmak için yetkiniz yok!");
+            messagesConfig.set("player-only-command", "&cBu komut yalnızca oyuncular tarafından kullanılabilir!");
             
             // Table management
-            messagesConfig.set("table-created", "&aBlackjack table created!");
-            messagesConfig.set("table-created-with-settings", "&aTable created! &7(min: &e%min_bet%&7, max: &e%max_bet%&7, players: &e%max_players%&7, distance: &e%max_join_distance%&7)");
-            messagesConfig.set("createtable-invalid-arg", "&cInvalid argument: %error%");
-            messagesConfig.set("table-removed", "&cBlackjack table removed!");
-            messagesConfig.set("table-already-exists", "&cTable already exists at this location!");
-            messagesConfig.set("table-remove-failed", "&cFailed to remove table!");
-            messagesConfig.set("no-table-nearby", "&cNo table found nearby!");
-            messagesConfig.set("settable-usage", "&eUsage: /bj settable <setting> <value>");
-            messagesConfig.set("settable-unknown-setting", "&cUnknown setting '%setting%'. Valid: min-bet, max-bet, max-players, max-join-distance");
-            messagesConfig.set("settable-invalid-value", "&cInvalid value: '%value%'");
-            messagesConfig.set("settable-validation-error", "&cValidation failed: %error%");
-            messagesConfig.set("settable-updated", "&aSetting &e%setting% &aset to &e%value% &aon nearest table.");
+            messagesConfig.set("table-created", "&aBlackjack masası oluşturuldu!");
+            messagesConfig.set("table-created-with-settings", "&aMasa oluşturuldu! &7(min: &e%min_bet%&7, maks: &e%max_bet%&7, oyuncular: &e%max_players%&7, mesafe: &e%max_join_distance%&7)");
+            messagesConfig.set("createtable-invalid-arg", "&cGeçersiz argüman: %error%");
+            messagesConfig.set("table-removed", "&cBlackjack masası kaldırıldı!");
+            messagesConfig.set("table-already-exists", "&cBu konumda zaten bir masa var!");
+            messagesConfig.set("table-remove-failed", "&cMasa kaldırılamadı!");
+            messagesConfig.set("no-table-nearby", "&cYakında masa bulunamadı!");
+            messagesConfig.set("settable-usage", "&eKullanım: /bj settable <ayar> <değer>");
+            messagesConfig.set("settable-unknown-setting", "&cBilinmeyen ayar '%setting%'. Geçerli ayarlar: min-bet, max-bet, max-players, max-join-distance");
+            messagesConfig.set("settable-invalid-value", "&cGeçersiz değer: '%value%'");
+            messagesConfig.set("settable-validation-error", "&cDoğrulama başarısız: %error%");
+            messagesConfig.set("settable-updated", "&aEn yakın masadaki &e%setting% &aayarı &e%value% &aolarak güncellendi.");
             
             // Player table status
-            messagesConfig.set("already-at-table", "&cYou are already at a table! Use /bj leave to leave your current table.");
-            messagesConfig.set("not-at-table", "&cYou're not at a table! Use /bj join near a table to play.");
-            messagesConfig.set("auto-left-table", "&eYou moved too far from the table and were automatically removed.");
-            messagesConfig.set("left-table", "&aYou left the table.");
-            messagesConfig.set("left-table-bet-refunded", "&aYou left the table and your bet of $%amount% has been refunded.");
-            messagesConfig.set("left-table-bet-forfeit", "&cYou left the table mid-game and forfeit your bet of $%amount%.");
+            messagesConfig.set("already-at-table", "&cZaten bir masadasınız! Mevcut masadan ayrılmak için /bj leave kullanın.");
+            messagesConfig.set("not-at-table", "&cBir masada değilsiniz! Oynamak için bir masanın yakınında /bj join yazın veya sandalyeye tıklayın.");
+            messagesConfig.set("auto-left-table", "&eMasadan çok uzaklaştığınız için masadan otomatik olarak çıkarıldınız.");
+            messagesConfig.set("auto-left-inactive", "&eDiğer oyuncuların oynayabilmesi için hareketsizlik nedeniyle masadan çıkarıldınız.");
+            messagesConfig.set("left-table", "&aMasadan ayrıldınız.");
+            messagesConfig.set("left-table-bet-refunded", "&aMasadan ayrıldınız ve $%amount% tutarındaki bahsiniz iade edildi.");
+            messagesConfig.set("left-table-bet-forfeit", "&cOyun devam ederken ayrıldığınız için $%amount% tutarındaki bahsiniz yandı.");
             
             // Table joining
-            messagesConfig.set("table-full", "&cThis table is full!");
-            messagesConfig.set("too-far", "&cYou are too far from the table to join!");
-            messagesConfig.set("no-seats", "&cNo available seats!");
-            messagesConfig.set("join-error", "&cError joining table. Please try again.");
-            messagesConfig.set("game-in-progress", "&cCannot perform this action during an active game!");
+            messagesConfig.set("table-full", "&cBu masa dolu!");
+            messagesConfig.set("too-far", "&cKatılmak için masaya çok uzaksınız!");
+            messagesConfig.set("no-seats", "&cUygun boş sandalye yok!");
+            messagesConfig.set("seat-taken", "&cBu sandalye zaten dolu!");
+            messagesConfig.set("inside-vehicle", "&cBir araca binerken masaya katılamazsınız!");
+            messagesConfig.set("join-error", "&cMasaya katılırken bir hata oluştu. Lütfen tekrar deneyin.");
+            messagesConfig.set("game-in-progress", "&cAktif bir oyun sırasında bu işlem yapılamaz!");
             
             // Betting
-            messagesConfig.set("bet-required", "&cYou must place a bet before the game can start! Use /bj bet <amount>");
-            messagesConfig.set("invalid-bet", "&cInvalid bet amount! Must be between %min_bet% and %max_bet%.");
-            messagesConfig.set("insufficient-funds", "&cYou don't have enough money to bet $%amount%!");
-            messagesConfig.set("bet-cooldown", "&cPlease wait a moment before changing your bet again.");
-            messagesConfig.set("bet-set", "&aYour bet has been set to $%amount%!");
-            messagesConfig.set("bet-already-set", "&eYour bet is already $%amount%!");
-            messagesConfig.set("bet-refunded", "&aYour bet of $%amount% has been refunded.");
-            messagesConfig.set("bet-refunded-shutdown", "&aBet refunded due to server shutdown: $%amount%");
-            messagesConfig.set("bet-reduced-refunded", "&aBet reduced to $%amount% and refunded $%refund%!");
-            messagesConfig.set("auto-bet-placed", "&aAuto-bet placed: $%amount%");
-            messagesConfig.set("invalid-amount", "&cInvalid amount!");
-            messagesConfig.set("bet-usage", "&cUsage: /bj bet <amount>");
-            messagesConfig.set("bet-failed", "&cFailed to process bet!");
-            messagesConfig.set("bet-refund-failed", "&cFailed to process bet refund!");
-            messagesConfig.set("error-refund", "&cAn error occurred while refunding your bet. Contact a staff member!");
-            messagesConfig.set("error-payout", "&cAn error occurred processing your payout. Contact a staff member!");
+            messagesConfig.set("bet-required", "&cOyunun başlayabilmesi için önce bahis koymalısınız! Kullanım: /bj bet <miktar>");
+            messagesConfig.set("invalid-bet", "&cGeçersiz bahis miktarı! %min_bet% ile %max_bet% arasında olmalıdır.");
+            messagesConfig.set("insufficient-funds", "&c$%amount% tutarında bahis koymak için yeterli paranız yok!");
+            messagesConfig.set("bet-cooldown", "&cBahsinizi tekrar değiştirmeden önce lütfen biraz bekleyin.");
+            messagesConfig.set("bet-set", "&aBahsiniz $%amount% olarak ayarlandı!");
+            messagesConfig.set("bet-already-set", "&eBahsiniz zaten $%amount%!");
+            messagesConfig.set("betting-locked", "&cMevcut el oynanırken veya sonuçlanırken bahisler kilitlidir.");
+            messagesConfig.set("bet-refunded", "&a$%amount% tutarındaki bahsiniz iade edildi.");
+            messagesConfig.set("bet-refunded-shutdown", "&aSunucu kapanması nedeniyle bahis iade edildi: $%amount%");
+            messagesConfig.set("bet-reduced-refunded", "&aBahis $%amount% tutarına düşürüldü ve $%refund% iade edildi!");
+            messagesConfig.set("auto-bet-placed", "&aOtomatik bahis yapıldı: $%amount%");
+            messagesConfig.set("invalid-amount", "&cGeçersiz miktar!");
+            messagesConfig.set("bet-usage", "&cKullanım: /bj bet <miktar>");
+            messagesConfig.set("bet-failed", "&cBahis işlemi gerçekleştirilemedi!");
+            messagesConfig.set("bet-refund-failed", "&cBahis iadesi gerçekleştirilemedi!");
+            messagesConfig.set("error-refund", "&cBahis iadesi yapılırken bir hata oluştu. Lütfen bir yetkiliye danışın!");
+            messagesConfig.set("error-payout", "&cKazanç ödemesi yapılırken bir hata oluştu. Lütfen bir yetkiliye danışın!");
             
             // Quick bet menu
-            messagesConfig.set("quick-bet-header", "&6&l=== Quick Bet Menu ===");
-            messagesConfig.set("quick-bet-description", "&7Click on an amount to place your bet:");
+            messagesConfig.set("quick-bet-header", "&6&l=== Hızlı Bahis Menüsü ===");
+            messagesConfig.set("quick-bet-description", "&7Bahis yapmak için bir miktara tıklayın:");
             messagesConfig.set("quick-bet-border", "&e&l▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬");
-            messagesConfig.set("quick-bet-title", "&6&l                          QUICK BET");
+            messagesConfig.set("quick-bet-title", "&6&l                         HIZLI BAHİS");
             
             // Game flow
-            messagesConfig.set("game-started", "&aGame started! %player%'s turn.");
-            messagesConfig.set("your-turn", "&aIt's your turn!");
-            messagesConfig.set("hand-value", "&aYour hand value: %value%");
-            messagesConfig.set("dealer-card", "&aDealer's visible card: %card% | Value: %value%");
-            messagesConfig.set("dealer-value", "&aDealer's final hand value: %value%");
+            messagesConfig.set("game-started", "&aOyun başladı! Sıra &b%player%&a'de");
+            messagesConfig.set("your-turn", "&aSıra sizde!");
+            messagesConfig.set("hand-value", "&aElinizin değeri: %value%");
+            messagesConfig.set("dealer-card", "&aKasanın görünen kartı: %card% | Değer: %value%");
+            messagesConfig.set("dealer-value", "&aKasanın son el değeri: %value%");
             
             // Game actions
-            messagesConfig.set("player-busts", "&c%player% busts!");
-            messagesConfig.set("player-stands", "&a%player% stands at %value%!");
-            messagesConfig.set("player-wins", "&a%player% wins and gets back $%amount%!");
-            messagesConfig.set("player-loses", "&c%player% loses their bet of $%amount%!");
-            messagesConfig.set("player-pushes", "&e%player% pushes and gets their bet of $%amount% back!");
-            messagesConfig.set("player-blackjack", "&6%player% got BLACKJACK and wins $%amount%!");
+            messagesConfig.set("player-busts", "&c%player% battı (21'i aştı)!");
+            messagesConfig.set("player-stands", "&a%player% %value% değerinde pas dedi!");
+            messagesConfig.set("player-wins", "&a%player% kazandı ve $%amount% aldı!");
+            messagesConfig.set("player-loses", "&c%player% $%amount% tutarındaki bahsini kaybetti!");
+            messagesConfig.set("player-pushes", "&e%player% berabere kaldı ve $%amount% bahsini geri aldı!");
+            messagesConfig.set("player-blackjack", "&6%player% BLACKJACK yaptı ve $%amount% kazandı!");
             
             // Double down
-            messagesConfig.set("double-down-first-two-cards", "&cYou can only double down on your first two cards!");
-            messagesConfig.set("double-down-already-used", "&cYou have already doubled down!");
-            messagesConfig.set("double-down-insufficient-funds", "&cYou don't have enough money to double down!");
+            messagesConfig.set("double-down-first-two-cards", "&cYalnızca ilk iki kartınız varken ikiye katlayabilirsiniz!");
+            messagesConfig.set("double-down-already-used", "&cZaten bahsinizi ikiye katladınız!");
+            messagesConfig.set("double-down-insufficient-funds", "&cBahsi ikiye katlamak için yeterli paranız yok!");
             
             // Hand display
-            messagesConfig.set("hand-display", "&bHand: %hand% | %hand_value%");
-            messagesConfig.set("dealer-shows", "&aDealer shows: %card% | %value%");
+            messagesConfig.set("hand-display", "&bEl: %hand% | %hand_value%");
+            messagesConfig.set("dealer-shows", "&aKasa: %card% | %value%");
             
             // Statistics
-            messagesConfig.set("stats-header", "&6=== Blackjack Statistics ===");
-            messagesConfig.set("stats-other-player-header", "&6=== %player%'s Blackjack Statistics ===");
-            messagesConfig.set("stats-hands-won", "&eHands Won: &a%value%");
-            messagesConfig.set("stats-hands-lost", "&eHands Lost: &c%value%");
-            messagesConfig.set("stats-hands-pushed", "&eHands Pushed: &7%value%");
-            messagesConfig.set("stats-blackjacks", "&eBlackjacks: &6%value%");
-            messagesConfig.set("stats-busts", "&eBusts: &c%value%");
-            messagesConfig.set("stats-win-rate", "&eWin Rate: &a%value%%");
-            messagesConfig.set("stats-current-streak", "&eCurrent Streak: &b%value%");
-            messagesConfig.set("stats-best-streak", "&eBest Streak: &a%value%");
-            messagesConfig.set("stats-total-winnings", "&eTotal Winnings: &2$%value%");
-            messagesConfig.set("stats-no-permission", "&cYou don't have permission to check other players' statistics!");
-            messagesConfig.set("stats-player-not-found", "&cPlayer not found: %player%");
-            messagesConfig.set("stats-none-found", "&cNo statistics found!");
-            messagesConfig.set("stats-none-found-player", "&cNo statistics found for %player%!");
+            messagesConfig.set("stats-header", "&6=== Blackjack İstatistikleri ===");
+            messagesConfig.set("stats-other-player-header", "&6=== %player% Blackjack İstatistikleri ===");
+            messagesConfig.set("stats-hands-won", "&eKazanılan Eller: &a%value%");
+            messagesConfig.set("stats-hands-lost", "&eKaybedilen Eller: &c%value%");
+            messagesConfig.set("stats-hands-pushed", "&eBerabere Bitenler: &7%value%");
+            messagesConfig.set("stats-blackjacks", "&eBlackjack Sayısı: &6%value%");
+            messagesConfig.set("stats-busts", "&eBatışlar: &c%value%");
+            messagesConfig.set("stats-win-rate", "&eKazanma Oranı: &a%%%value%");
+            messagesConfig.set("stats-current-streak", "&eMevcut Seri: &b%value%");
+            messagesConfig.set("stats-best-streak", "&eEn İyi Seri: &a%value%");
+            messagesConfig.set("stats-total-winnings", "&eToplam Kazanç: &2$%value%");
+            messagesConfig.set("stats-no-permission", "&cDiğer oyuncuların istatistiklerini kontrol etmek için yetkiniz yok!");
+            messagesConfig.set("stats-player-not-found", "&cOyuncu bulunamadı: %player%");
+            messagesConfig.set("stats-none-found", "&cİstatistik bulunamadı!");
+            messagesConfig.set("stats-none-found-player", "&c%player% için istatistik bulunamadı!");
             
             // Configuration
-            messagesConfig.set("config-reloaded", "&aConfiguration reloaded!");
+            messagesConfig.set("config-reloaded", "&aYapılandırma yeniden yüklendi!");
             
             // Help command
-            messagesConfig.set("help-header", "&rAvailable Commands:");
-            messagesConfig.set("help-admin-create", "&e/bj createtable [min-bet:<n>] [max-bet:<n>] [max-players:<n>] [max-join-distance:<n>] &7- Create a table");
-            messagesConfig.set("help-admin-settable", "&e/bj settable <setting> <value> &7- Modify nearest table settings");
-            messagesConfig.set("help-admin-remove", "&e/bj removetable &7- Remove the nearest table");
-            messagesConfig.set("help-admin-reload", "&e/bj reload &7- Reload configuration");
-            messagesConfig.set("help-admin-version", "&e/bj version &7- Check plugin version and update status");
-            messagesConfig.set("help-join", "&e/bj join &7- Join the nearest table");
-            messagesConfig.set("help-leave", "&e/bj leave &7- Leave your current table");
-            messagesConfig.set("help-bet", "&e/bj bet <amount> &7- Place or change your bet");
-            messagesConfig.set("help-start", "&e/bj start &7- Start a new game");
-            messagesConfig.set("help-hit", "&e/bj hit &7- Take another card");
-            messagesConfig.set("help-stand", "&e/bj stand &7- End your turn");
-            messagesConfig.set("help-stats", "&e/bj stats &7- View your statistics");
-            messagesConfig.set("help-stats-others", "&e/bj stats <player> &7- View another player's statistics");
+            messagesConfig.set("help-header", "&rKullanılabilir Komutlar:");
+            messagesConfig.set("help-admin-create", "&e/bj createtable [min-bet:<n>] [max-bet:<n>] [max-players:<n>] [max-join-distance:<n>] &7- Blackjack masası oluşturur");
+            messagesConfig.set("help-admin-settable", "&e/bj settable <ayar> <değer> &7- En yakın masanın ayarlarını değiştirir");
+            messagesConfig.set("help-admin-remove", "&e/bj removetable &7- En yakın masayı kaldırır");
+            messagesConfig.set("help-admin-reload", "&e/bj reload &7- Yapılandırmayı yeniden yükler");
+            messagesConfig.set("help-admin-version", "&e/bj version &7- Eklenti sürümünü ve durumunu kontrol eder");
+            messagesConfig.set("help-join", "&e/bj join &7- En yakın masaya katılır");
+            messagesConfig.set("help-leave", "&e/bj leave &7- Mevcut masadan ayrılır");
+            messagesConfig.set("help-bet", "&e/bj bet <miktar> &7- Bahis koyar veya bahsi değiştirir");
+            messagesConfig.set("help-start", "&e/bj start &7- Yeni bir oyun başlatır");
+            messagesConfig.set("help-hit", "&e/bj hit &7- Bir kart daha çeker");
+            messagesConfig.set("help-stand", "&e/bj stand &7- Sıranızı bitirir (pas)");
+            messagesConfig.set("help-stats", "&e/bj stats &7- İstatistiklerinizi görüntüler");
+            messagesConfig.set("help-stats-others", "&e/bj stats <oyuncu> &7- Başka bir oyuncunun istatistiklerini görüntüler");
             
             // Table broadcast messages
-            messagesConfig.set("player-left-during-turn", "&c%player% %reason% during their turn.");
+            messagesConfig.set("player-left-during-turn", "&c%player% sırası kendisine geldiğinde %reason%.");
             messagesConfig.set("player-left-table", "&c%player% %reason%.");
             
             // Game action prompts
-            messagesConfig.set("game-action-prompt", "&7Your turn: ");
+            messagesConfig.set("game-action-prompt", "&7Hamleniz: ");
             messagesConfig.set("game-action-separator", "&7 | ");
-            messagesConfig.set("post-game-prompt", "&7Choose: ");
+            messagesConfig.set("post-game-prompt", "&7Seçim: ");
             
             // Betting category labels
-            messagesConfig.set("betting-category-small", "&7Small: ");
-            messagesConfig.set("betting-category-medium", "&7Medium: ");
-            messagesConfig.set("betting-category-large", "&7Large: ");
+            messagesConfig.set("betting-category-small", "&7Düşük: ");
+            messagesConfig.set("betting-category-medium", "&7Orta: ");
+            messagesConfig.set("betting-category-large", "&7Yüksek: ");
             
             // Button configuration
-            messagesConfig.set("buttons.hit.text", "&a&l[HIT]");
+            messagesConfig.set("buttons.hit.text", "&a&l[KART ÇEK]");
             messagesConfig.set("buttons.hit.command", "/bj hit");
-            messagesConfig.set("buttons.hit.hover", "&eClick to take another card");
+            messagesConfig.set("buttons.hit.hover", "&eBir kart daha çekmek için tıklayın");
             
-            messagesConfig.set("buttons.stand.text", "&c&l[STAND]");
+            messagesConfig.set("buttons.stand.text", "&c&l[PAS]");
             messagesConfig.set("buttons.stand.command", "/bj stand");
-            messagesConfig.set("buttons.stand.hover", "&eClick to end your turn");
+            messagesConfig.set("buttons.stand.hover", "&eSıranızı bitirmek için tıklayın");
             
-            messagesConfig.set("buttons.double-down.text", "&6&l[DOUBLE DOWN]");
+            messagesConfig.set("buttons.double-down.text", "&6&l[İKİYE KATLA]");
             messagesConfig.set("buttons.double-down.command", "/bj doubledown");
-            messagesConfig.set("buttons.double-down.hover", "&eClick to double your bet and take one card");
+            messagesConfig.set("buttons.double-down.hover", "&eBahsinizi ikiye katlayıp tek bir kart çekmek için tıklayın");
             
-            messagesConfig.set("buttons.play-again.text", "&a&l[Play Again]");
+            messagesConfig.set("buttons.play-again.text", "&a&l[Tekrar Oyna]");
             messagesConfig.set("buttons.play-again.command", "/bj start");
-            messagesConfig.set("buttons.play-again.hover", "&eClick to start a new game");
+            messagesConfig.set("buttons.play-again.hover", "&eYeni bir oyun başlatmak için tıklayın");
             
-            messagesConfig.set("buttons.leave-table.text", "&c&l[Leave Table]");
+            messagesConfig.set("buttons.leave-table.text", "&c&l[Masadan Ayrıl]");
             messagesConfig.set("buttons.leave-table.command", "/bj leave");
-            messagesConfig.set("buttons.leave-table.hover", "&eClick to leave the table");
+            messagesConfig.set("buttons.leave-table.hover", "&eMasadan ayrılmak için tıklayın");
             
-            messagesConfig.set("buttons.custom-bet.text", "&b&l[CUSTOM BET]");
+            messagesConfig.set("buttons.custom-bet.text", "&b&l[ÖZEL BAHİS]");
             messagesConfig.set("buttons.custom-bet.command", "/bj bet ");
-            messagesConfig.set("buttons.custom-bet.hover", "&eClick to enter custom amount");
+            messagesConfig.set("buttons.custom-bet.hover", "&eÖzel bir miktar girmek için tıklayın");
             
             // Button color configurations
             messagesConfig.set("buttons.small-bet-color", "&a");    // Green for small bets
@@ -379,9 +399,17 @@ public class BlackjackPlugin extends JavaPlugin implements Listener {
     public void onPlayerJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
         
-        // Check if player is admin and notify about updates
-        if (player.hasPermission("blackjack.admin")) {
+        // Check if player is admin and notify about updates if enabled
+        if (configManager.isVersionCheckerEnabled() && player.hasPermission("blackjack.admin")) {
             versionChecker.notifyAdmin(player);
+        }
+
+        // Asynchronously load player stats into cache if stats tracker is enabled
+        if (configManager.isStatsTrackerEnabled() && databaseManager != null) {
+            getServer().getScheduler().runTaskAsynchronously(this, () -> {
+                PlayerStats stats = databaseManager.loadPlayerStats(player.getUniqueId());
+                playerStats.put(player.getUniqueId(), stats);
+            });
         }
     }
     
@@ -395,14 +423,26 @@ public class BlackjackPlugin extends JavaPlugin implements Listener {
         
         // Remove from table if they're at one
         if (tableManager != null) {
-            tableManager.removePlayerFromTable(player, "disconnected from the server");
+            tableManager.removePlayerFromTable(player, configManager.getLeaveReason("disconnected"));
         }
         
-        // Note: Stats are now saved periodically, not on every quit for better performance
+        // Asynchronously persist player stats to DB on quit if enabled
+        if (configManager.isStatsTrackerEnabled() && databaseManager != null) {
+            PlayerStats stats = playerStats.remove(player.getUniqueId());
+            if (stats != null) {
+                getServer().getScheduler().runTaskAsynchronously(this, () -> {
+                    databaseManager.savePlayerStats(player.getUniqueId(), stats);
+                });
+            }
+        }
     }
     
     @EventHandler
     public void onPlayerMove(PlayerMoveEvent event) {
+        if (!configManager.isAutoLeaveDistanceEnabled()) {
+            return;
+        }
+
         Player player = event.getPlayer();
         
         // Only check if player moved to a different block (optimization)
@@ -420,7 +460,7 @@ public class BlackjackPlugin extends JavaPlugin implements Listener {
                 
                 if (distance > maxDistance) {
                     // Player moved too far from table, auto-leave
-                    table.removePlayer(player, "moved too far from the table");
+                    table.removePlayer(player, configManager.getLeaveReason("moved-away"));
                     player.sendMessage(configManager.getMessage("auto-left-table")
                         .replace("%distance%", String.format("%.1f", distance))
                         .replace("%max_distance%", String.format("%.1f", maxDistance)));
@@ -479,7 +519,8 @@ public class BlackjackPlugin extends JavaPlugin implements Listener {
             return true;
         }
 
-        if (tableManager.createTable(player.getLocation(), settings)) {
+        Location tableLoc = com.vortex.blackjack.table.TableManager.normalizeLocation(player.getLocation());
+        if (tableManager.createTable(tableLoc, settings)) {
             player.sendMessage(configManager.formatMessage("table-created-with-settings",
                 "min_bet",          settings.getMinBet(configManager),
                 "max_bet",          settings.getMaxBet(configManager),
@@ -589,8 +630,14 @@ public class BlackjackPlugin extends JavaPlugin implements Listener {
     private boolean handleLeave(Player player) {
         BlackjackTable table = tableManager.getPlayerTable(player);
         if (table != null) {
+            Integer bet = playerBets.get(player);
+            if (configManager.isLeaveConfirmGuiEnabled() && bet != null && bet > 0) {
+                new com.vortex.blackjack.gui.LeaveConfirmGUI(this, table, player, bet).open();
+                return true;
+            }
+
             // Remove player from table (this will handle bet refunding automatically if needed)
-            table.removePlayer(player);
+            table.removePlayer(player, configManager.getLeaveReason("normal"));
             
             // Clear persistent bet when leaving
             playerPersistentBets.remove(player);
@@ -637,6 +684,10 @@ public class BlackjackPlugin extends JavaPlugin implements Listener {
     }
     
     private boolean handleDoubleDown(Player player) {
+        if (!configManager.isDoubleDownEnabled()) {
+            player.sendMessage(configManager.getMessage("double-down-disabled"));
+            return true;
+        }
         return GenericUtils.handleTableAction(player, tableManager, configManager, "doubledown", 
             table -> table.doubleDown(player));
     }
@@ -666,6 +717,11 @@ public class BlackjackPlugin extends JavaPlugin implements Listener {
     }
     
     private boolean handleStats(Player player, String[] args) {
+        if (!configManager.isStatsTrackerEnabled()) {
+            player.sendMessage(configManager.getMessage("stats-disabled"));
+            return true;
+        }
+
         UUID targetUUID = player.getUniqueId();
         String targetName = player.getName();
         
@@ -682,11 +738,7 @@ public class BlackjackPlugin extends JavaPlugin implements Listener {
                 targetUUID = targetPlayer.getUniqueId();
                 targetName = targetPlayer.getName();
             } else {
-                // Try to find offline player using UUID (avoiding deprecated method)
                 try {
-                    // Attempt to get UUID from Mojang API or cache (implement as needed)
-                    // Example: Use a UUID cache or external API here for production
-                    // For now, fallback to searching known offline players
                     org.bukkit.OfflinePlayer[] offlinePlayers = getServer().getOfflinePlayers();
                     org.bukkit.OfflinePlayer offlinePlayer = null;
                     for (org.bukkit.OfflinePlayer op : offlinePlayers) {
@@ -709,9 +761,17 @@ public class BlackjackPlugin extends JavaPlugin implements Listener {
             }
         }
         
-        // Load stats for the target player
-        FileConfiguration statsConfig = YamlConfiguration.loadConfiguration(statsFile);
-        PlayerStats stats = GenericUtils.loadPlayerStats(statsConfig, targetUUID);
+        // Load stats for the target player from memory or database
+        PlayerStats stats = playerStats.get(targetUUID);
+        if (stats == null && databaseManager != null) {
+            stats = databaseManager.loadPlayerStats(targetUUID);
+            if (stats != null && targetUUID.equals(player.getUniqueId())) {
+                playerStats.put(targetUUID, stats);
+            }
+        }
+        if (stats == null) {
+            stats = new PlayerStats();
+        }
         
         if (stats.getTotalHands() == 0) {
             if (targetUUID.equals(player.getUniqueId())) {
@@ -752,13 +812,13 @@ public class BlackjackPlugin extends JavaPlugin implements Listener {
             return true;
         }
 
-        player.sendMessage("§6§l=== Blackjack Plugin Version Info ===");
-        player.sendMessage("§fPlugin: §aBlackjack");
-        player.sendMessage("§fAuthor: §bDefectiveVortex");
-        player.sendMessage("§fCurrent Version: §a" + versionChecker.getCurrentVersion());
+        player.sendMessage("§6§l=== Blackjack Eklenti Sürüm Bilgisi ===");
+        player.sendMessage("§fEklenti: §aBlackjack");
+        player.sendMessage("§fGeliştirici: §bDefectiveVortex");
+        player.sendMessage("§fMevcut Sürüm: §a" + versionChecker.getCurrentVersion());
 
         if (versionChecker.getLatestVersion() != null) {
-            player.sendMessage("§fLatest Version: §a" + versionChecker.getLatestVersion());
+            player.sendMessage("§fEn Son Sürüm: §a" + versionChecker.getLatestVersion());
         }
 
         player.sendMessage(versionChecker.getVersionStatus());
@@ -862,16 +922,19 @@ public class BlackjackPlugin extends JavaPlugin implements Listener {
     
     
     private void savePlayerStats() {
-        if (playerStats.isEmpty()) {
+        if (!configManager.isStatsTrackerEnabled() || playerStats.isEmpty()) {
             return;
         }
         
+        if (databaseManager != null) {
+            databaseManager.saveAllPlayerStats(playerStats);
+            return;
+        }
+
         FileConfiguration statsConfig = YamlConfiguration.loadConfiguration(statsFile);
-        
         for (Map.Entry<UUID, PlayerStats> entry : playerStats.entrySet()) {
             GenericUtils.savePlayerStats(statsConfig, entry.getKey(), entry.getValue());
         }
-        
         try {
             if (!statsFile.getParentFile().exists()) {
                 statsFile.getParentFile().mkdirs();
@@ -1020,6 +1083,7 @@ public class BlackjackPlugin extends JavaPlugin implements Listener {
     // Getters for managers (used by other classes)
     public ConfigManager getConfigManager() { return configManager; }
     public TableManager getTableManager() { return tableManager; }
+    public DatabaseManager getDatabaseManager() { return databaseManager; }
     public EconomyProvider getEconomyProvider() { return economyProvider; }
     public AsyncUtils getAsyncUtils() { return asyncUtils; }
     

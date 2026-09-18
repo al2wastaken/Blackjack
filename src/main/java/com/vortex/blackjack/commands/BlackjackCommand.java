@@ -30,7 +30,7 @@ public abstract class BlackjackCommand implements CommandExecutor, TabCompleter 
     protected void sendPlayerOnlyMessage(CommandSender sender) {
         // We'll need to get the config manager to send this message properly
         // For now, use the hardcoded message to avoid breaking functionality
-        sender.sendMessage("§cThis command can only be used by players!");
+        sender.sendMessage("§cBu komut yalnızca oyuncular tarafından kullanılabilir!");
     }
     
     @Override

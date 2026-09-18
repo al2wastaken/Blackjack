@@ -24,11 +24,6 @@ public class BlackjackPlaceholderExpansion extends PlaceholderExpansion {
     private final DecimalFormat decimalFormat = new DecimalFormat("#.##");
     private final DecimalFormat percentFormat = new DecimalFormat("#.#");
     
-    // Cache for stats to avoid reading file too frequently
-    private FileConfiguration cachedStatsConfig;
-    private long lastStatsLoad = 0;
-    private static final long STATS_CACHE_DURATION = 5000; // 5 seconds
-    
     public BlackjackPlaceholderExpansion(BlackjackPlugin plugin) {
         this.plugin = plugin;
     }
@@ -97,21 +92,21 @@ public class BlackjackPlaceholderExpansion extends PlaceholderExpansion {
      * Examples: %blackjack_stats_hands_won%, %blackjack_stats_win_rate%
      */
     private String handleStatsPlaceholder(Player player, String param) {
-        // Load stats from file with caching to improve performance
-        FileConfiguration statsConfig = getCachedStatsConfig();
-        if (statsConfig == null) {
+        if (!plugin.getConfigManager().isStatsTrackerEnabled()) {
             return param.equals("has_played") ? "false" : "0";
         }
-        
-        String path = "players." + player.getUniqueId() + ".";
-        
-        // If no data exists for this player, return defaults
-        if (!statsConfig.contains(path)) {
-            return param.equals("has_played") ? "false" : "0";
+
+        PlayerStats stats = plugin.getPlayerStats().get(player.getUniqueId());
+        if (stats == null && plugin.getDatabaseManager() != null) {
+            stats = plugin.getDatabaseManager().loadPlayerStats(player.getUniqueId());
+            if (stats != null) {
+                plugin.getPlayerStats().put(player.getUniqueId(), stats);
+            }
         }
         
-        // Use generic method to load player stats
-        PlayerStats stats = GenericUtils.loadPlayerStats(statsConfig, player.getUniqueId());
+        if (stats == null) {
+            return param.equals("has_played") ? "false" : "0";
+        }
         
         return switch (param) {
             case "hands_won" -> String.valueOf(stats.getHandsWon());
@@ -129,33 +124,6 @@ public class BlackjackPlaceholderExpansion extends PlaceholderExpansion {
             case "has_played" -> stats.getTotalHands() > 0 ? "true" : "false";
             default -> "0";
         };
-    }
-    
-    /**
-     * Get cached stats configuration to avoid reading file too frequently
-     */
-    private FileConfiguration getCachedStatsConfig() {
-        long currentTime = System.currentTimeMillis();
-        
-        // Check if cache is still valid
-        if (cachedStatsConfig != null && (currentTime - lastStatsLoad) < STATS_CACHE_DURATION) {
-            return cachedStatsConfig;
-        }
-        
-        // Load stats from file
-        File statsFile = new File(plugin.getDataFolder(), "stats.yml");
-        if (!statsFile.exists()) {
-            return null;
-        }
-        
-        try {
-            cachedStatsConfig = YamlConfiguration.loadConfiguration(statsFile);
-            lastStatsLoad = currentTime;
-            return cachedStatsConfig;
-        } catch (Exception e) {
-            plugin.getLogger().warning("Failed to load stats file for PlaceholderAPI: " + e.getMessage());
-            return null;
-        }
     }
     
     /**

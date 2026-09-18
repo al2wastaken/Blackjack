@@ -72,11 +72,11 @@ public class TableSettings {
     public String validate(ConfigManager cfg) {
         int lo = getMinBet(cfg);
         int hi = getMaxBet(cfg);
-        if (lo > hi) return "min-bet (" + lo + ") cannot exceed max-bet (" + hi + ")";
+        if (lo > hi) return "min-bet (" + lo + "), max-bet (" + hi + ") değerinden büyük olamaz";
         if (maxPlayers != null && (maxPlayers < 1 || maxPlayers > 8))
-            return "max-players must be between 1 and 8";
+            return "max-players 1 ile 8 arasında olmalıdır";
         if (maxJoinDistance != null && maxJoinDistance < 1.0)
-            return "max-join-distance must be at least 1";
+            return "max-join-distance en az 1 olmalıdır";
         return null;
     }
 
@@ -96,8 +96,8 @@ public class TableSettings {
             String tok   = tokens[i];
             int    colon = tok.indexOf(':');
             if (colon < 0) {
-                errorOut.append("Invalid argument '").append(tok)
-                        .append("' — expected format key:value");
+                errorOut.append("Geçersiz argüman '").append(tok)
+                        .append("' — beklenen biçim: ayar:değer");
                 return null;
             }
             String key = tok.substring(0, colon).toLowerCase();
@@ -109,13 +109,13 @@ public class TableSettings {
                     case "max-players"        -> s.setMaxPlayers(parsePositiveInt(val));
                     case "max-join-distance"  -> s.setMaxJoinDistance(parsePositiveDouble(val));
                     default -> {
-                        errorOut.append("Unknown setting '").append(key)
-                                .append("'. Valid: min-bet, max-bet, max-players, max-join-distance");
+                        errorOut.append("Bilinmeyen ayar '").append(key)
+                                .append("'. Geçerli ayarlar: min-bet, max-bet, max-players, max-join-distance");
                         return null;
                     }
                 }
             } catch (NumberFormatException e) {
-                errorOut.append("Invalid value for '").append(key).append("': ").append(val);
+                errorOut.append("Geçersiz değer '").append(key).append("': ").append(val);
                 return null;
             }
         }

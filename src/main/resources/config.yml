@@ -1,3 +1,55 @@
+# ==============================================================================
+# Blackjack Plugin Configuration
+# ==============================================================================
+
+# Database Configuration (HikariCP Connection Pool)
+# Supports SQLite (local file) and MySQL (remote or local database)
+database:
+  # Database type: SQLITE or MYSQL
+  type: SQLITE
+  
+  # SQLite Settings
+  sqlite:
+    file: "blackjack.db"
+    
+  # MySQL Settings (used when type: MYSQL)
+  mysql:
+    host: "localhost"
+    port: 3306
+    database: "blackjack"
+    username: "root"
+    password: ""
+    ssl: false
+    
+  # HikariCP Connection Pool Settings
+  pool:
+    maximum-pool-size: 10
+    minimum-idle: 2
+    connection-timeout-ms: 30000
+    idle-timeout-ms: 600000
+    max-lifetime-ms: 1800000
+
+# Feature Toggles (Enable/Disable plugin features)
+features:
+  # Show confirmation GUI when player tries to leave chair with active bet (forfeits bet)
+  leave-confirm-gui: true
+  # Allow players to Double Down on their first two cards
+  double-down: true
+  # Display clickable quick-bet menu in chat
+  quick-bets: true
+  # Clickable chat action buttons ([KART ÇEK], [PAS], [İKİYE KATLA])
+  interactive-chat-buttons: true
+  # Physical chair sitting system (right-click chairs to sit)
+  chair-sitting: true
+  # Automatically remove inactive players from table so others can play
+  auto-leave-inactivity: true
+  # Automatically remove players who walk too far away from the table
+  auto-leave-distance: true
+  # Player stats tracking system and /bj stats command
+  stats-tracker: true
+  # Check for plugin updates on GitHub
+  version-checker: true
+
 # Betting Settings
 betting:
   min-bet: 10
@@ -10,10 +62,24 @@ betting:
     medium: [100, 250, 500]
     large: [1000, 2500, 5000]
 
-# Table Settings
+# Table Settings (Roulette-style 3D models and chairs)
 table:
   max-join-distance: 10.0
   max-players: 4
+  # Visual Styling (OAK, SPRUCE, BIRCH, JUNGLE, ACACIA, DARK_OAK, MANGROVE, CHERRY)
+  wood-type: DARK_OAK
+  # Table felt color (GREEN, RED, BLUE, BLACK, PURPLE, etc.)
+  felt-color: GREEN
+  # Chair cushion color (RED, GREEN, BLUE, BLACK, etc.)
+  chair-cushion-color: RED
+  # Floating status hologram above table
+  hologram:
+    enabled: true
+    title: "&6&lBLACKJACK"
+  # Chair sounds
+  sounds:
+    sit: BLOCK_WOODEN_TRAPDOOR_CLOSE
+  # Legacy fallback materials
   table-material: GREEN_TERRACOTTA
   chair-material: DARK_OAK_STAIRS
 
@@ -22,7 +88,7 @@ game:
   hit-soft-17: false  # Whether dealer hits on soft 17
   auto-leave-timeout-seconds: 30  # Time before inactive players are auto-removed when others are waiting
 
-# Card Display Settings (Original working system - minimal config)
+# Card Display Settings (ItemDisplay cards on table)
 display:
   card:
     scale: 0.35
@@ -68,9 +134,7 @@ particles:
 
 # Performance Settings
 performance:
-  # How often to save player statistics (in seconds)
-  # Lower values = more frequent saves but slightly more disk I/O
-  # Higher values = less frequent saves but potential data loss if server crashes
+  # How often to save player statistics to database (in seconds)
   stats-save-interval: 3
 
 # Game Settings

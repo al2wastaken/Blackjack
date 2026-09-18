@@ -18,27 +18,27 @@ public class VersionCommand extends BlackjackCommand {
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (!sender.hasPermission("blackjack.admin")) {
-            sender.sendMessage("§cYou don't have permission to use this command.");
+            sender.sendMessage("§cBu komutu kullanmak için yetkiniz yok.");
             return true;
         }
         
-        sender.sendMessage("§6§l▬▬▬ BLACKJACK PLUGIN VERSION INFO ▬▬▬");
+        sender.sendMessage("§6§l▬▬▬ BLACKJACK EKLENTİ SÜRÜM BİLGİSİ ▬▬▬");
         sender.sendMessage("");
-        sender.sendMessage("§fPlugin: §aBlackjack");
-        sender.sendMessage("§fAuthor: §bDefectiveVortex");
-        sender.sendMessage("§fCurrent Version: §a" + versionChecker.getCurrentVersion());
+        sender.sendMessage("§fEklenti: §aBlackjack");
+        sender.sendMessage("§fGeliştirici: §bDefectiveVortex");
+        sender.sendMessage("§fMevcut Sürüm: §a" + versionChecker.getCurrentVersion());
         
         if (versionChecker.getLatestVersion() != null) {
-            sender.sendMessage("§fLatest Version: §a" + versionChecker.getLatestVersion());
+            sender.sendMessage("§fEn Son Sürüm: §a" + versionChecker.getLatestVersion());
         }
         
         sender.sendMessage("");
         
         if (versionChecker.isOutdated()) {
-            sender.sendMessage("§c⚠ UPDATE AVAILABLE!");
-            sender.sendMessage("§bDownload: §9https://github.com/DefectiveVortex/Blackjack/releases/latest");
+            sender.sendMessage("§c⚠ GÜNCELLEME MEVCUT!");
+            sender.sendMessage("§bİndir: §9https://github.com/DefectiveVortex/Blackjack/releases/latest");
         } else {
-            sender.sendMessage("§a✓ UP TO DATE!");
+            sender.sendMessage("§a✓ GÜNCEL!");
         }
         
         sender.sendMessage("");

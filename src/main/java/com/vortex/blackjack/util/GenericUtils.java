@@ -103,7 +103,7 @@ public class GenericUtils {
             int amount = amounts.get(i);
             String buttonText = configManager.getBetColorByAmount(amount) + "$" + amount;
             String command = "/bj bet " + amount;
-            String hoverText = "§eClick to bet $" + amount;
+            String hoverText = "§e$" + amount + " bahis yapmak için tıklayın";
             
             TextComponent button = createClickableButton(buttonText, command, hoverText);
             row.addExtra(button);
@@ -169,7 +169,7 @@ public class GenericUtils {
             // Use config message if available, fallback to hardcoded
             String message = configManager != null ? 
                 configManager.getMessage("player-only-command") : 
-                "§cThis command can only be used by players!";
+                "§cBu komut yalnızca oyuncular tarafından kullanılabilir!";
             sender.sendMessage(message);
             return null;
         }
