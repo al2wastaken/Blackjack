@@ -8,6 +8,7 @@ import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URI;
+import java.util.List;
 import java.util.logging.Level;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -100,16 +101,10 @@ public class VersionChecker {
         if (isOutdated) {
             Bukkit.getScheduler().runTaskLater(plugin, () -> {
                 String downloadUrl = "https://github.com/" + gitHubRepo + "/releases/latest";
-                
-                admin.sendMessage("§e╔═══════════════════════════════════════════════════════════════════════════╗");
-                admin.sendMessage("§e║ §6⚠ BLACKJACK PLUGIN UPDATE AVAILABLE§e                                 ║");
-                admin.sendMessage("§e║                                                                           ║");
-                admin.sendMessage("§e║ §fCurrent version: §c" + currentVersion + "§e                                                  ║");
-                admin.sendMessage("§e║ §fLatest version:  §a" + latestVersion + "§e                                                  ║");
-                admin.sendMessage("§e║                                                                           ║");
-                admin.sendMessage("§e║ §bDownload: §9" + downloadUrl + "§e     ║");
-                admin.sendMessage("§e║ §7Use §f/bj version§7 for details§e                                       ║");
-                admin.sendMessage("§e╚═══════════════════════════════════════════════════════════════════════════╝");
+                List<String> lines = plugin.getConfigManager().getAdminVersionNotification(currentVersion, latestVersion, downloadUrl);
+                for (String line : lines) {
+                    admin.sendMessage(line);
+                }
             }, 40L); // Delay 2 seconds after join
         }
     }
@@ -118,19 +113,20 @@ public class VersionChecker {
      * Get version status message for command
      */
     public String getVersionStatus() {
+        var cfg = plugin.getConfigManager();
         if (checkFailed) {
-            return "§cCould not check for updates. Please check your internet connection.";
+            return cfg.getMessage("version-info.check-failed");
         }
         
         if (latestVersion == null) {
-            return "§eChecking for updates...";
+            return cfg.getMessage("version-info.checking");
         }
         
         if (isOutdated) {
             String downloadUrl = "https://github.com/" + gitHubRepo + "/releases/latest";
-            return "§cOutdated version! Current: " + currentVersion + " | Latest: §a" + latestVersion + "§c\nDownload: §9" + downloadUrl;
+            return cfg.formatMessage("version-info.status-outdated", "current", currentVersion, "latest", latestVersion, "url", downloadUrl);
         } else {
-            return "§aPlugin is up to date! Current version: " + currentVersion;
+            return cfg.formatMessage("version-info.status-current", "current", currentVersion);
         }
     }
     
@@ -166,5 +162,9 @@ public class VersionChecker {
     
     public String getLatestVersion() {
         return latestVersion;
+    }
+
+    public String getGitHubRepo() {
+        return gitHubRepo;
     }
 }

@@ -38,6 +38,7 @@ public class ConfigManager {
     private Sound chairSitSound;
     private boolean tableHologramEnabled;
     private String tableHologramTitle;
+    private String currencySymbol;
     
     public ConfigManager(FileConfiguration config, FileConfiguration messagesConfig) {
         this.config = config;
@@ -97,9 +98,13 @@ public class ConfigManager {
         
         // Game rules
         hitSoft17 = config.getBoolean("game.hit-soft-17", false);
+
+        // Currency
+        currencySymbol = config.getString("currency-symbol", "$");
     }
     
     // Getters
+    public String getCurrencySymbol() { return currencySymbol != null ? currencySymbol : "$"; }
     public int getMinBet() { return minBet; }
     public int getMaxBet() { return maxBet; }
     public long getBetCooldown() { return betCooldown; }
@@ -269,6 +274,10 @@ public class ConfigManager {
     }
     
     // Message handling
+    public boolean hasMessage(String path) {
+        return messagesConfig.contains(path) || config.contains("messages." + path);
+    }
+
     public String getMessage(String path) {
         String message;
         // Try messages config first, then fall back to main config with "messages." prefix
@@ -282,6 +291,7 @@ public class ConfigManager {
             message = "&cMessage not found: " + path;
         }
         
+        message = message.replace("%currency%", getCurrencySymbol());
         return ChatColor.translateAlternateColorCodes('&', message);
     }
 
@@ -303,6 +313,7 @@ public class ConfigManager {
         if (list == null) return Collections.emptyList();
         List<String> colored = new ArrayList<>(list.size());
         for (String s : list) {
+            s = s.replace("%currency%", getCurrencySymbol());
             colored.add(ChatColor.translateAlternateColorCodes('&', s));
         }
         return colored;
@@ -321,6 +332,95 @@ public class ConfigManager {
             formatted.add(s);
         }
         return formatted;
+    }
+
+    // -------------------------------------------------------------------------
+    // Display & Formatting Helpers
+    // -------------------------------------------------------------------------
+
+    public String getGameActionBarMessage(boolean showDoubleDown) {
+        String msg = getMessage("actionbar.game-controls");
+        if (showDoubleDown && isDoubleDownEnabled()) {
+            msg += getMessage("actionbar.game-controls-doubledown");
+        }
+        return msg;
+    }
+
+    public String getCountdownActionBarMessage(int secondsRemaining) {
+        return formatMessage("actionbar.countdown", "seconds", secondsRemaining);
+    }
+
+    public String getTurnBossBarTitle(String playerName, int secondsRemaining) {
+        return formatMessage("bossbar.turn", "player", playerName, "seconds", secondsRemaining);
+    }
+
+    public String getDealerDrawingBossBarTitle() {
+        return getMessage("bossbar.dealer-drawing");
+    }
+
+    public String formatHandDisplay(int val, boolean isBusted, boolean isBlackjack) {
+        if (isBusted) {
+            return formatMessage("table-display.hand-busted", "value", val);
+        } else if (isBlackjack) {
+            return formatMessage("table-display.hand-blackjack", "value", val);
+        } else if (val == 21) {
+            return formatMessage("table-display.hand-twentyone", "value", val);
+        } else {
+            return formatMessage("table-display.hand-value", "value", val);
+        }
+    }
+
+    public String getDeskControls(boolean canDouble) {
+        return canDouble ? getMessage("table-display.desk-controls-doubledown") : getMessage("table-display.desk-controls");
+    }
+
+    public String formatDealerScoreDisplay(int val, boolean isBusted, boolean isTwentyOne, boolean isInitial) {
+        if (isInitial) {
+            return formatMessage("table-display.dealer-score", "value", val);
+        } else if (isBusted) {
+            return formatMessage("table-display.dealer-score-busted", "value", val);
+        } else if (isTwentyOne) {
+            return formatMessage("table-display.dealer-score-twentyone", "value", val);
+        } else {
+            return formatMessage("table-display.dealer-score-final", "value", val);
+        }
+    }
+
+    public String getCroupierDisplayName() {
+        return getMessage("table-display.croupier-name");
+    }
+
+    public String getSkinDisplayName(String key) {
+        if (key == null) key = "classic";
+        String path = "table-settings-gui.skins." + key.toLowerCase();
+        if (hasMessage(path)) {
+            return getMessage(path);
+        }
+        return key;
+    }
+
+    public String getFeltDisplayName(Material mat) {
+        if (mat == null) return "Green";
+        String name = mat.name().replace("_WOOL", "").toLowerCase();
+        String path = "table-settings-gui.felts." + name;
+        if (hasMessage(path)) {
+            return getMessage(path);
+        }
+        return mat.name();
+    }
+
+    public List<String> getHologramRules(int currentPlayers, int capacity) {
+        List<String> lines = new ArrayList<>();
+        lines.add(formatMessage("hologram-rules.line1"));
+        lines.add(formatMessage("hologram-rules.line2"));
+        lines.add(formatMessage("hologram-rules.line3"));
+        lines.add(formatMessage("hologram-rules.line4", "players", currentPlayers, "capacity", capacity));
+        return lines;
+    }
+
+    public List<String> getAdminVersionNotification(String current, String latest, String downloadUrl) {
+        return formatMessageList("version-info.admin-notify", Collections.emptyList(),
+                "current", current, "latest", latest, "url", downloadUrl);
     }
 
     // -------------------------------------------------------------------------

@@ -152,6 +152,7 @@ reasons:
   normal: "masadan ayrıldı"
   inactive: "hareketsizlik nedeniyle çıkarıldı"
   forfeited: "masadan ayrılarak bahsini yaktı"
+  insufficient-funds: "yetersiz bakiye nedeniyle çıkarıldı"
 
 # Table Hologram Settings
 hologram:
@@ -278,3 +279,171 @@ console-blackjack-enabled: "Blackjack başarıyla etkinleştirildi!"
 console-blackjack-disabled: "Blackjack eklentisi devre dışı bırakıldı!"
 console-messages-created: "messages.yml dosyası oluşturuldu"
 console-default-messages-created: "Varsayılan messages.yml dosyası oluşturuluyor"
+
+# Betting GUI (In-game casino betting menu)
+betting-gui:
+  title: "&8Kumarhane Bahis Menüsü"
+  info-item:
+    name: "&6&lMasa ve Bahis Bilgisi"
+    lore-min-bet: "&7Masa Minimum: &f%min_bet%%currency%"
+    lore-max-bet: "&7Masa Maksimum: &f%max_bet%%currency%"
+    lore-balance: "&7Bakiyeniz: &a%balance%%currency%"
+    lore-current-bet: "&aŞu Anki Bahsiniz: &e%current_bet%%currency%"
+    lore-change-bet: "&7(Yeni bir çip seçerek bahsinizi değiştirebilirsiniz)"
+    lore-no-bet: "&cHenüz bahis koymadınız."
+    lore-select-chip-1: "&7Aşağıdaki çiplerden birini seçin veya"
+    lore-select-chip-2: "&7özel bir miktar belirleyin."
+    lore-footer-1: "&8Kartlar dağıtılmadan önce [Space] ile"
+    lore-footer-2: "&8bu menüyü tekrar açabilirsiniz."
+  chip:
+    name: "&e&l%amount%%currency% Çip"
+    lore-value: "&7Değer: &a%amount%%currency%"
+    lore-min-limit: "&c(Masa minimumu %min_bet%%currency%)"
+    lore-max-limit: "&c(Masa maksimumu %max_bet%%currency%)"
+    lore-click: "&eTıkla: Bahis olarak %amount%%currency% yatır"
+  custom-bet:
+    name: "&b&lÖzel Bahis (Custom Bet)"
+    lore-1: "&7Kendi istediğiniz bahis miktarını"
+    lore-2: "&7tabela arayüzüne yazmak için tıklayın."
+    lore-click: "&eTıkla: Özel miktar gir"
+  wait-button:
+    name: "&e&lBekle (Sonra Belirle)"
+    lore-1: "&7Şimdilik bahis koymadan masada bekleyin."
+    lore-2: "&7Geri sayım bitmeden önce &e[Space] &7tuşuna"
+    lore-3: "&7basarak istediğiniz an bahis yapabilirsiniz."
+    lore-warn-1: "&c⚠ Not: Geri sayım bittiğinde hala bahis"
+    lore-warn-2: "&cyapmadıysanız otomatik olarak minimum"
+    lore-warn-3: "&cbahis (&e%min_bet%%currency%&c) alınacaktır."
+    lore-click: "&eTıkla: Menüyü kapat ve bekle"
+  messages:
+    game-in-progress: "&cOyun başladıktan sonra bahis değiştirilemez!"
+    waiting: "&eMasada bekliyorsunuz. Geri sayım bitmeden önce &a[Space] &etuşuna basarak bahsinizi belirleyebilirsiniz."
+    min-bet-error: "&cBu masada minimum bahis %min_bet%%currency%!"
+    max-bet-error: "&cBu masada maksimum bahis %max_bet%%currency%!"
+    insufficient-funds: "&cYetersiz bakiye! %amount%%currency% yatırmak için %needed%%currency% daha gereklidir."
+    bet-placed: "&aBahsiniz &e%amount%%currency% &aolarak yatırıldı! Kartların dağıtılması bekleniyor..."
+    custom-bet-prompt: "&eLütfen açılan tabelaya bahis miktarını yazın ve Tamam'a basın..."
+    invalid-number: "&cGeçersiz sayı girdiniz! Bahis ayarlanamadı."
+    invalid-amount: "&cGeçersiz miktar: %input%"
+
+# Table & Croupier Admin Settings GUI
+table-settings-gui:
+  title: "&8Masa ve Krupiye Ayarları"
+  skins:
+    classic: "Klasik Smokin"
+    lady: "Leydi Krupiye"
+    mafia: "Mafya Babası"
+    casual: "Günlük Krupiye"
+  felts:
+    green: "Yeşil"
+    red: "Kırmızı"
+    blue: "Mavi"
+    black: "Siyah"
+    purple: "Mor"
+    lime: "Açık Yeşil"
+    cyan: "Camgöbeği"
+  skin-item:
+    name: "&6&lKrupiye Skini"
+    lore-current: "&7Mevcut Skin: &e%skin%"
+    lore-left: "&aSol Tık: &7Sonraki hazır skine geç"
+    lore-right: "&cSağ Tık: &7Önceki hazır skine geç"
+  min-bet-item:
+    name: "&e&lMinimum Bahis"
+    lore-current: "&7Mevcut Minimum: &e%min_bet%%currency%"
+    lore-left: "&aSol Tık: &7+%amount%%currency% artır"
+    lore-right: "&cSağ Tık: &7-%amount%%currency% azalt"
+    lore-shift-left: "&eShift + Sol Tık: &7+%amount%%currency% artır"
+    lore-shift-right: "&eShift + Sağ Tık: &7-%amount%%currency% azalt"
+  max-bet-item:
+    name: "&6&lMaksimum Bahis"
+    lore-current: "&7Mevcut Maksimum: &e%max_bet%%currency%"
+    lore-left: "&aSol Tık: &7+%amount%%currency% artır"
+    lore-right: "&cSağ Tık: &7-%amount%%currency% azalt"
+    lore-shift-left: "&eShift + Sol Tık: &7+%amount%%currency% artır"
+    lore-shift-right: "&eShift + Sağ Tık: &7-%amount%%currency% azalt"
+  countdown-item:
+    name: "&b&lGeri Sayım Süresi"
+    lore-current: "&7Mevcut Süre: &e%seconds% saniye"
+    lore-click: "&aSol Tık: &7Süreyi değiştir (5, 10, 15, 20, 30 sn)"
+  felt-item:
+    name: "&a&lMasa Örtüsü Kumaşı"
+    lore-current: "&7Mevcut Renk: &e%color%"
+    lore-left: "&aSol Tık: &7Sonraki kumaş rengine geç"
+    lore-right: "&cSağ Tık: &7Önceki kumaş rengine geç"
+
+# Action Bar Messages
+actionbar:
+  game-controls: "&aSol Tık: Çek &7| &eSağ Tık: Pas"
+  game-controls-doubledown: " &7| &bSpace: İkiye Katla"
+  countdown: "&eOyun Başlıyor: &6%seconds%s &7| [Space] Bahis Değiştir"
+
+# BossBar Messages
+bossbar:
+  turn: "&fSıra: &e%player% &7| &f%seconds% saniye"
+  dealer-drawing: "&fKrupiyer kart çekiyor..."
+
+# Table Broadcast Events
+table-events:
+  auto-bet-countdown: "&eGeri sayım bittiği için otomatik minimum bahis (&a%min_bet%%currency%&e) yatırıldı."
+  removed-cannot-afford-min: "&cMinimum bahsi (%min_bet%%currency%) karşılayacak bakiyeniz olmadığı için masadan kaldırıldınız!"
+  player-turn-timeout: "&e%player% &7hamle süresini doldurdu; eli pas geçildi."
+  dealer-initial-hand: "&6[Kasa] &eİlk el açıldı: &f%hand% &7(Değer: &e%value%&7)"
+  dealer-draw-card: "&6[Kasa] &eKart çekti: &f%card% &7(Toplam: &e%value%&7)"
+  round-preparing-hint: "&eYeni el hazırlanıyor... Bahsinizi değiştirmek için &a[Space] &etuşuna basabilirsiniz."
+
+# Floating Displays and NPC Labels
+table-display:
+  croupier-name: "&6&lKRUPİYE"
+  hand-busted: "&c&lEl: %value% &4(PATLADI)"
+  hand-blackjack: "&6&lEl: 21 &a★ BLACKJACK"
+  hand-twentyone: "&6&lEl: 21 &a★"
+  hand-value: "&a&lEl: &f%value% &7/ 21"
+  dealer-score: "&6&lKASA: &e%value%"
+  dealer-score-busted: "&c&lKASA: &4%value% (PATLADI)"
+  dealer-score-twentyone: "&6&lKASA: &e21 &6★"
+  dealer-score-final: "&6&lKASA: &f%value%"
+  desk-controls: "&e[Sol Tık: Çek &7| &eSağ Tık: Pas]"
+  desk-controls-doubledown: "&e[Sol Tık: Çek &7| &eSağ Tık: Pas &7| &eİkiye katla: Boşluk]"
+
+# Table Hologram Rules
+hologram-rules:
+  line1: "&6&lBLACKJACK"
+  line2: "&7Krupiye 17'de durur ve 16'da kart çeker"
+  line3: "&eAnında 21, 2.5x ödeme yapar"
+  line4: "&aKatılmak için sağ tıkla! &7(%players%/%capacity%)"
+
+# Version Checker & Command
+version-info:
+  no-permission: "&cBu komutu kullanmak için yetkiniz yok."
+  header: "&6&l▬▬▬ BLACKJACK EKLENTİ SÜRÜM BİLGİSİ ▬▬▬"
+  plugin: "&fEklenti: &aBlackjack"
+  developer: "&fGeliştirici: &bal2wastaken"
+  current-version: "&fMevcut Sürüm: &a%version%"
+  latest-version: "&fEn Son Sürüm: &a%version%"
+  update-available: "&c⚠ GÜNCELLEME MEVCUT!"
+  download-link: "&bİndir: &9%url%"
+  up-to-date: "&a✓ GÜNCEL!"
+  github: "&7GitHub: &9%url%"
+  checking: "&eGüncellemeler kontrol ediliyor..."
+  check-failed: "&cGüncellemeler kontrol edilemedi. Lütfen internet bağlantınızı kontrol edin."
+  status-outdated: "&cEski sürüm! Mevcut: %current% | En Son: &a%latest%&c\nİndir: &9%url%"
+  status-current: "&aEklenti güncel! Mevcut sürüm: %current%"
+  admin-notify:
+    - "&e╔═══════════════════════════════════════════════════════════════════════════╗"
+    - "&e║ &6⚠ BLACKJACK EKLENTİ GÜNCELLEMESİ MEVCUT&e                             ║"
+    - "&e║                                                                           ║"
+    - "&e║ &fMevcut sürüm: &c%current%&e                                                  ║"
+    - "&e║ &fEn son sürüm: &a%latest%&e                                                  ║"
+    - "&e║                                                                           ║"
+    - "&e║ &bİndir: &9%url%&e     ║"
+    - "&e║ &7Ayrıntılar için &f/bj version&7 yazın&e                                     ║"
+    - "&e╚═══════════════════════════════════════════════════════════════════════════╝"
+
+# Settings Validation Errors
+settings-validation:
+  format-error: "Geçersiz argüman '%token%' — beklenen biçim: ayar:değer"
+  unknown-setting: "Bilinmeyen ayar '%key%'. Geçerli ayarlar: min-bet, max-bet, max-players, max-join-distance"
+  invalid-value: "Geçersiz değer '%key%': %val%"
+  min-greater-max: "min-bet (%min%), max-bet (%max%) değerinden büyük olamaz"
+  players-range: "max-players 1 ile 8 arasında olmalıdır"
+  min-distance: "max-join-distance en az 1 olmalıdır"

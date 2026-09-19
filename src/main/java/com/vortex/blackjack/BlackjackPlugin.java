@@ -837,21 +837,22 @@ public class BlackjackPlugin extends JavaPlugin implements Listener {
 
     private boolean handleVersion(Player player) {
         if (!player.hasPermission("blackjack.admin")) {
-            player.sendMessage(configManager.getMessage("no-permission"));
+            player.sendMessage(configManager.getMessage("version-info.no-permission"));
             return true;
         }
 
-        player.sendMessage("§6§l=== Blackjack Plugin Version ===");
-        player.sendMessage("§fPlugin: §aBlackjack");
-        player.sendMessage("§fMaintainer: §bal2wastaken");
-        player.sendMessage("§fCurrent version: §a" + versionChecker.getCurrentVersion());
+        player.sendMessage(configManager.getMessage("version-info.header"));
+        player.sendMessage("");
+        player.sendMessage(configManager.getMessage("version-info.plugin"));
+        player.sendMessage(configManager.getMessage("version-info.developer"));
+        player.sendMessage(configManager.formatMessage("version-info.current-version", "version", versionChecker.getCurrentVersion()));
 
         if (versionChecker.getLatestVersion() != null) {
-            player.sendMessage("§fLatest version: §a" + versionChecker.getLatestVersion());
+            player.sendMessage(configManager.formatMessage("version-info.latest-version", "version", versionChecker.getLatestVersion()));
         }
 
         player.sendMessage(versionChecker.getVersionStatus());
-        player.sendMessage("§7GitHub: §9https://github.com/al2wastaken/Blackjack");
+        player.sendMessage(configManager.formatMessage("version-info.github", "url", "https://github.com/" + versionChecker.getGitHubRepo()));
         return true;
     }
 

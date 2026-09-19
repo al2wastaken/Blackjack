@@ -6,6 +6,9 @@
 # Run /bj reload after changing this value.
 language: en
 
+# Currency symbol used in GUIs, broadcasts, and messages (e.g. $, ₺, €, £)
+currency-symbol: "$"
+
 # Database Configuration (HikariCP Connection Pool)
 # Supports SQLite (local file) and MySQL (remote or local database)
 database:

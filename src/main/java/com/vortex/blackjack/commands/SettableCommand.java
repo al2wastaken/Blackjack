@@ -19,10 +19,8 @@ public class SettableCommand extends BlackjackCommand {
             "min-bet", "max-bet", "max-players", "max-join-distance"
     );
 
-    private final BlackjackPlugin plugin;
-
     public SettableCommand(BlackjackPlugin plugin) {
-        this.plugin = plugin;
+        super(plugin);
     }
 
     @Override

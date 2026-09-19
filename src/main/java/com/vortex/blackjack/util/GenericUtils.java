@@ -6,6 +6,7 @@ import com.vortex.blackjack.table.BlackjackTable;
 import com.vortex.blackjack.table.TableManager;
 import net.md_5.bungee.api.chat.ClickEvent;
 import net.md_5.bungee.api.chat.TextComponent;
+import org.bukkit.ChatColor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.Player;
@@ -101,9 +102,9 @@ public class GenericUtils {
             if (i > 0) row.addExtra(" ");
             
             int amount = amounts.get(i);
-            String buttonText = configManager.getBetColorByAmount(amount) + "$" + amount;
+            String buttonText = configManager.getBetColorByAmount(amount) + configManager.getCurrencySymbol() + amount;
             String command = "/bj bet " + amount;
-            String hoverText = "§e$" + amount + " bahis yapmak için tıklayın";
+            String hoverText = configManager.formatMessage("buttons.bet-hover", "amount", amount);
             
             TextComponent button = createClickableButton(buttonText, command, hoverText);
             row.addExtra(button);
@@ -169,7 +170,7 @@ public class GenericUtils {
             // Use config message if available, fallback to hardcoded
             String message = configManager != null ? 
                 configManager.getMessage("player-only-command") : 
-                "§cBu komut yalnızca oyuncular tarafından kullanılabilir!";
+                ChatColor.RED + "Only players can use this command.";
             sender.sendMessage(message);
             return null;
         }

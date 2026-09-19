@@ -124,7 +124,7 @@ public class CroupierNPC {
             display.setDefaultBackground(true);
             display.setSeeThrough(false);
             display.setPersistent(false);
-            display.setText(ChatColor.GOLD + "" + ChatColor.BOLD + "KRUPİYE");
+            display.setText(plugin.getConfigManager().getCroupierDisplayName());
             display.addScoreboardTag("blackjack-entity");
             display.addScoreboardTag("blackjack-croupier-text");
             display.addScoreboardTag("blackjack-table:" + table.getTableId());

@@ -115,6 +115,7 @@ reasons:
   normal: "left the table"
   inactive: "was removed for inactivity"
   forfeited: "forfeited their bet by leaving the table"
+  insufficient-funds: "was removed due to insufficient funds"
 hologram:
   status-in-progress: "&cGame in progress"
   status-ready: "&aReady to play"
@@ -158,3 +159,171 @@ buttons:
 game-action-prompt: "&7Your move: "
 game-action-separator: "&7 | "
 post-game-prompt: "&7Choose: "
+
+# Betting GUI (In-game casino betting menu)
+betting-gui:
+  title: "&8Casino Betting Menu"
+  info-item:
+    name: "&6&lTable & Bet Info"
+    lore-min-bet: "&7Table Min: &f%min_bet%%currency%"
+    lore-max-bet: "&7Table Max: &f%max_bet%%currency%"
+    lore-balance: "&7Your Balance: &a%balance%%currency%"
+    lore-current-bet: "&aCurrent Bet: &e%current_bet%%currency%"
+    lore-change-bet: "&7(Click any chip to change your bet)"
+    lore-no-bet: "&cYou have not placed a bet yet."
+    lore-select-chip-1: "&7Select a chip below or"
+    lore-select-chip-2: "&7enter a custom amount."
+    lore-footer-1: "&8Press [Space] before cards are dealt"
+    lore-footer-2: "&8to reopen this menu anytime."
+  chip:
+    name: "&e&l%amount%%currency% Chip"
+    lore-value: "&7Value: &a%amount%%currency%"
+    lore-min-limit: "&c(Table min %min_bet%%currency%)"
+    lore-max-limit: "&c(Table max %max_bet%%currency%)"
+    lore-click: "&eClick: Place %amount%%currency% as bet"
+  custom-bet:
+    name: "&b&lCustom Bet"
+    lore-1: "&7Click to type a custom bet"
+    lore-2: "&7amount on the sign interface."
+    lore-click: "&eClick: Enter custom amount"
+  wait-button:
+    name: "&e&lWait (Decide Later)"
+    lore-1: "&7Wait at table without betting for now."
+    lore-2: "&7You can press &e[Space] &7anytime before"
+    lore-3: "&7the countdown ends to place a bet."
+    lore-warn-1: "&c⚠ Note: If you do not bet before the"
+    lore-warn-2: "&ccountdown finishes, the table minimum"
+    lore-warn-3: "&cbet (&e%min_bet%%currency%&c) will be placed."
+    lore-click: "&eClick: Close menu and wait"
+  messages:
+    game-in-progress: "&cYou cannot change your bet once the game has started!"
+    waiting: "&eYou are waiting at the table. Press &a[Space] &ebefore the countdown ends to set your bet."
+    min-bet-error: "&cThe minimum bet for this table is %min_bet%%currency%!"
+    max-bet-error: "&cThe maximum bet for this table is %max_bet%%currency%!"
+    insufficient-funds: "&cInsufficient balance! You need %needed%%currency% more to bet %amount%%currency%."
+    bet-placed: "&aYour bet of &e%amount%%currency% &ahas been placed! Waiting for cards to deal..."
+    custom-bet-prompt: "&ePlease type your bet amount on the sign and click Done..."
+    invalid-number: "&cInvalid number entered! Bet could not be set."
+    invalid-amount: "&cInvalid amount: %input%"
+
+# Table & Croupier Admin Settings GUI
+table-settings-gui:
+  title: "&8Table & Croupier Settings"
+  skins:
+    classic: "Classic Tuxedo"
+    lady: "Lady Croupier"
+    mafia: "Mafya Boss"
+    casual: "Casual Dealer"
+  felts:
+    green: "Green"
+    red: "Red"
+    blue: "Blue"
+    black: "Black"
+    purple: "Purple"
+    lime: "Lime"
+    cyan: "Cyan"
+  skin-item:
+    name: "&6&lCroupier Skin"
+    lore-current: "&7Current Skin: &e%skin%"
+    lore-left: "&aLeft Click: &7Next preset skin"
+    lore-right: "&cRight Click: &7Previous preset skin"
+  min-bet-item:
+    name: "&e&lMinimum Bet"
+    lore-current: "&7Current Minimum: &e%min_bet%%currency%"
+    lore-left: "&aLeft Click: &7+%amount%%currency%"
+    lore-right: "&cRight Click: &7-%amount%%currency%"
+    lore-shift-left: "&eShift + Left Click: &7+%amount%%currency%"
+    lore-shift-right: "&eShift + Right Click: &7-%amount%%currency%"
+  max-bet-item:
+    name: "&6&lMaximum Bet"
+    lore-current: "&7Current Maximum: &e%max_bet%%currency%"
+    lore-left: "&aLeft Click: &7+%amount%%currency%"
+    lore-right: "&cRight Click: &7-%amount%%currency%"
+    lore-shift-left: "&eShift + Left Click: &7+%amount%%currency%"
+    lore-shift-right: "&eShift + Right Click: &7-%amount%%currency%"
+  countdown-item:
+    name: "&b&lCountdown Duration"
+    lore-current: "&7Current Duration: &e%seconds% seconds"
+    lore-click: "&aLeft Click: &7Change duration (5, 10, 15, 20, 30s)"
+  felt-item:
+    name: "&a&lTable Felt Cloth"
+    lore-current: "&7Current Color: &e%color%"
+    lore-left: "&aLeft Click: &7Next felt color"
+    lore-right: "&cRight Click: &7Previous felt color"
+
+# Action Bar Messages
+actionbar:
+  game-controls: "&aLeft Click: Hit &7| &eRight Click: Stand"
+  game-controls-doubledown: " &7| &bSpace: Double Down"
+  countdown: "&eGame Starting: &6%seconds%s &7| [Space] Change Bet"
+
+# BossBar Messages
+bossbar:
+  turn: "&fTurn: &e%player% &7| &f%seconds%s"
+  dealer-drawing: "&fDealer is drawing cards..."
+
+# Table Broadcast Events
+table-events:
+  auto-bet-countdown: "&eCountdown ended. An automatic minimum bet of &a%min_bet%%currency% &ewas placed."
+  removed-cannot-afford-min: "&cYou were removed from the table because you cannot afford the minimum bet (%min_bet%%currency%)!"
+  player-turn-timeout: "&e%player% &7ran out of time; hand stood."
+  dealer-initial-hand: "&6[Dealer] &eFirst hand revealed: &f%hand% &7(Value: &e%value%&7)"
+  dealer-draw-card: "&6[Dealer] &eDrew card: &f%card% &7(Total: &e%value%&7)"
+  round-preparing-hint: "&eNew round preparing... Press &a[Space] &eto change your bet."
+
+# Floating Displays and NPC Labels
+table-display:
+  croupier-name: "&6&lDEALER"
+  hand-busted: "&c&lHand: %value% &4(BUSTED)"
+  hand-blackjack: "&6&lHand: 21 &a★ BLACKJACK"
+  hand-twentyone: "&6&lHand: 21 &a★"
+  hand-value: "&a&lHand: &f%value% &7/ 21"
+  dealer-score: "&6&lDEALER: &e%value%"
+  dealer-score-busted: "&c&lDEALER: &4%value% (BUSTED)"
+  dealer-score-twentyone: "&6&lDEALER: &e21 &6★"
+  dealer-score-final: "&6&lDEALER: &f%value%"
+  desk-controls: "&e[Left Click: Hit &7| &eRight Click: Stand]"
+  desk-controls-doubledown: "&e[Left Click: Hit &7| &eRight Click: Stand &7| &eDouble Down: Space]"
+
+# Table Hologram Rules
+hologram-rules:
+  line1: "&6&lBLACKJACK"
+  line2: "&7Dealer stands on 17 and hits on 16"
+  line3: "&eInstant 21 pays 2.5x"
+  line4: "&aRight click to join! &7(%players%/%capacity%)"
+
+# Version Checker & Command
+version-info:
+  no-permission: "&cYou do not have permission to use this command."
+  header: "&6&l▬▬▬ BLACKJACK PLUGIN VERSION INFO ▬▬▬"
+  plugin: "&fPlugin: &aBlackjack"
+  developer: "&fDeveloper: &bal2wastaken"
+  current-version: "&fCurrent Version: &a%version%"
+  latest-version: "&fLatest Version: &a%version%"
+  update-available: "&c⚠ UPDATE AVAILABLE!"
+  download-link: "&bDownload: &9%url%"
+  up-to-date: "&a✓ UP TO DATE!"
+  github: "&7GitHub: &9%url%"
+  checking: "&eChecking for updates..."
+  check-failed: "&cCould not check for updates. Please check your internet connection."
+  status-outdated: "&cOutdated version! Current: %current% | Latest: &a%latest%&c\nDownload: &9%url%"
+  status-current: "&aPlugin is up to date! Current version: %current%"
+  admin-notify:
+    - "&e╔═══════════════════════════════════════════════════════════════════════════╗"
+    - "&e║ &6⚠ BLACKJACK PLUGIN UPDATE AVAILABLE&e                                 ║"
+    - "&e║                                                                           ║"
+    - "&e║ &fCurrent version: &c%current%&e                                                  ║"
+    - "&e║ &fLatest version:  &a%latest%&e                                                  ║"
+    - "&e║                                                                           ║"
+    - "&e║ &bDownload: &9%url%&e     ║"
+    - "&e║ &7Use &f/bj version&7 for details&e                                       ║"
+    - "&e╚═══════════════════════════════════════════════════════════════════════════╝"
+
+# Settings Validation Errors
+settings-validation:
+  format-error: "Invalid argument '%token%' — expected format: setting:value"
+  unknown-setting: "Unknown setting '%key%'. Valid settings: min-bet, max-bet, max-players, max-join-distance"
+  invalid-value: "Invalid value for '%key%': %val%"
+  min-greater-max: "min-bet (%min%) cannot be greater than max-bet (%max%)"
+  players-range: "max-players must be between 1 and 8"
+  min-distance: "max-join-distance must be at least 1"

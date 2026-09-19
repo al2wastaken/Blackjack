@@ -12,10 +12,9 @@ import java.util.List;
  * Handle blackjack stats forwarding with admin support for checking other players' stats.
  */
 public class StatsCommand extends BlackjackCommand {
-    private final BlackjackPlugin plugin;
     
     public StatsCommand(BlackjackPlugin plugin) {
-        this.plugin = plugin;
+        super(plugin);
     }
     
     @Override

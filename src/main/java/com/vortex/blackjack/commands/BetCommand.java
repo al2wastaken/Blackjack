@@ -12,11 +12,10 @@ import java.util.List;
  * Handle blackjack bet forwarding with smart amount suggestions and configurable chat betting.
  */
 public class BetCommand extends BlackjackCommand {
-    private final BlackjackPlugin plugin;
     private final ChatUtils chatUtils;
     
     public BetCommand(BlackjackPlugin plugin) {
-        this.plugin = plugin;
+        super(plugin);
         this.chatUtils = new ChatUtils(plugin.getConfigManager());
     }
     

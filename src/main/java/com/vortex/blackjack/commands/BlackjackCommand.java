@@ -15,6 +15,11 @@ import java.util.List;
  * Base class for blackjack commands with common functionality
  */
 public abstract class BlackjackCommand implements CommandExecutor, TabCompleter {
+    protected final com.vortex.blackjack.BlackjackPlugin plugin;
+
+    protected BlackjackCommand(com.vortex.blackjack.BlackjackPlugin plugin) {
+        this.plugin = plugin;
+    }
     
     protected boolean isPlayer(CommandSender sender) {
         return sender instanceof Player;
@@ -28,9 +33,11 @@ public abstract class BlackjackCommand implements CommandExecutor, TabCompleter 
     }
     
     protected void sendPlayerOnlyMessage(CommandSender sender) {
-        // We'll need to get the config manager to send this message properly
-        // For now, use the hardcoded message to avoid breaking functionality
-        sender.sendMessage("§cBu komut yalnızca oyuncular tarafından kullanılabilir!");
+        if (plugin != null && plugin.getConfigManager() != null) {
+            sender.sendMessage(plugin.getConfigManager().getMessage("player-only-command"));
+        } else {
+            sender.sendMessage(org.bukkit.ChatColor.RED + "Only players can use this command.");
+        }
     }
     
     @Override

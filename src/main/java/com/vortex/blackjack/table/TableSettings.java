@@ -106,11 +106,11 @@ public class TableSettings {
     public String validate(ConfigManager cfg) {
         int lo = getMinBet(cfg);
         int hi = getMaxBet(cfg);
-        if (lo > hi) return "min-bet (" + lo + "), max-bet (" + hi + ") değerinden büyük olamaz";
+        if (lo > hi) return cfg.formatMessage("settings-validation.min-greater-max", "min", lo, "max", hi);
         if (maxPlayers != null && (maxPlayers < 1 || maxPlayers > 8))
-            return "max-players 1 ile 8 arasında olmalıdır";
+            return cfg.getMessage("settings-validation.players-range");
         if (maxJoinDistance != null && maxJoinDistance < 1.0)
-            return "max-join-distance en az 1 olmalıdır";
+            return cfg.getMessage("settings-validation.min-distance");
         return null;
     }
 
@@ -130,8 +130,7 @@ public class TableSettings {
             String tok   = tokens[i];
             int    colon = tok.indexOf(':');
             if (colon < 0) {
-                errorOut.append("Geçersiz argüman '").append(tok)
-                        .append("' — beklenen biçim: ayar:değer");
+                errorOut.append(cfg.formatMessage("settings-validation.format-error", "token", tok));
                 return null;
             }
             String key = tok.substring(0, colon).toLowerCase();
@@ -143,13 +142,12 @@ public class TableSettings {
                     case "max-players"        -> s.setMaxPlayers(parsePositiveInt(val));
                     case "max-join-distance"  -> s.setMaxJoinDistance(parsePositiveDouble(val));
                     default -> {
-                        errorOut.append("Bilinmeyen ayar '").append(key)
-                                .append("'. Geçerli ayarlar: min-bet, max-bet, max-players, max-join-distance");
+                        errorOut.append(cfg.formatMessage("settings-validation.unknown-setting", "key", key));
                         return null;
                     }
                 }
             } catch (NumberFormatException e) {
-                errorOut.append("Geçersiz değer '").append(key).append("': ").append(val);
+                errorOut.append(cfg.formatMessage("settings-validation.invalid-value", "key", key, "val", val));
                 return null;
             }
         }

@@ -1,10 +1,10 @@
 package com.vortex.blackjack.gui;
 
 import com.vortex.blackjack.BlackjackPlugin;
+import com.vortex.blackjack.config.ConfigManager;
 import com.vortex.blackjack.croupier.CroupierSkin;
 import com.vortex.blackjack.table.BlackjackTable;
 import org.bukkit.Bukkit;
-import org.bukkit.ChatColor;
 import org.bukkit.Material;
 import org.bukkit.Sound;
 import org.bukkit.entity.Player;
@@ -27,10 +27,10 @@ public class TableSettingsGUI implements InventoryHolder {
     private final BlackjackPlugin plugin;
     private final BlackjackTable table;
     private final Player player;
+    private final ConfigManager configManager;
     private final Inventory inventory;
 
     private static final String[] PRESET_SKIN_KEYS = {"classic", "lady", "mafia", "casual"};
-    private static final String[] PRESET_SKIN_NAMES = {"Klasik Smokin", "Leydi Krupiye", "Mafya Babası", "Günlük Krupiye"};
     private static final int[] COUNTDOWN_OPTIONS = {5, 10, 15, 20, 30};
     private static final Material[] FELT_MATERIALS = {
             Material.GREEN_WOOL,
@@ -41,71 +41,71 @@ public class TableSettingsGUI implements InventoryHolder {
             Material.LIME_WOOL,
             Material.CYAN_WOOL
     };
-    private static final String[] FELT_NAMES = {"Yeşil", "Kırmızı", "Mavi", "Siyah", "Mor", "Açık Yeşil", "Camgöbeği"};
 
     public TableSettingsGUI(BlackjackPlugin plugin, BlackjackTable table, Player player) {
         this.plugin = plugin;
         this.table = table;
         this.player = player;
-        this.inventory = Bukkit.createInventory(this, 27, "§8Masa ve Krupiye Ayarları");
+        this.configManager = plugin.getConfigManager();
+        this.inventory = Bukkit.createInventory(this, 27, configManager.getMessage("table-settings-gui.title"));
         buildInventory();
     }
 
     public void buildInventory() {
-        ItemStack bg = createItem(Material.GRAY_STAINED_GLASS_PANE, "§7", null);
+        ItemStack bg = createItem(Material.GRAY_STAINED_GLASS_PANE, " ", null);
         for (int i = 0; i < 27; i++) {
             inventory.setItem(i, bg);
         }
 
         // Slot 10: Croupier Skin
         String currentSkin = table.getSettings().getCroupierSkin();
-        String skinDisplay = getSkinDisplayName(currentSkin);
+        String skinDisplay = configManager.getSkinDisplayName(currentSkin);
         List<String> skinLore = new ArrayList<>();
-        skinLore.add("§7Mevcut Skin: §e" + skinDisplay);
+        skinLore.add(configManager.formatMessage("table-settings-gui.skin-item.lore-current", "skin", skinDisplay));
         skinLore.add("");
-        skinLore.add("§aSol Tık: §7Sonraki hazır skine geç");
-        skinLore.add("§cSağ Tık: §7Önceki hazır skine geç");
-        inventory.setItem(10, createItem(Material.PLAYER_HEAD, "§6§lKrupiye Skini", skinLore));
+        skinLore.add(configManager.getMessage("table-settings-gui.skin-item.lore-left"));
+        skinLore.add(configManager.getMessage("table-settings-gui.skin-item.lore-right"));
+        inventory.setItem(10, createItem(Material.PLAYER_HEAD, configManager.getMessage("table-settings-gui.skin-item.name"), skinLore));
 
         // Slot 12: Min Bet
-        int minBet = table.getSettings().getMinBet(plugin.getConfigManager());
+        int minBet = table.getSettings().getMinBet(configManager);
         List<String> minLore = new ArrayList<>();
-        minLore.add("§7Mevcut Minimum: §e" + minBet + "₺");
+        minLore.add(configManager.formatMessage("table-settings-gui.min-bet-item.lore-current", "min_bet", minBet));
         minLore.add("");
-        minLore.add("§aSol Tık: §7+10₺ artır");
-        minLore.add("§cSağ Tık: §7-10₺ azalt");
-        minLore.add("§eShift + Sol Tık: §7+50₺ artır");
-        minLore.add("§eShift + Sağ Tık: §7-50₺ azalt");
-        inventory.setItem(12, createItem(Material.GOLD_NUGGET, "§e§lMinimum Bahis", minLore));
+        minLore.add(configManager.formatMessage("table-settings-gui.min-bet-item.lore-left", "amount", 10));
+        minLore.add(configManager.formatMessage("table-settings-gui.min-bet-item.lore-right", "amount", 10));
+        minLore.add(configManager.formatMessage("table-settings-gui.min-bet-item.lore-shift-left", "amount", 50));
+        minLore.add(configManager.formatMessage("table-settings-gui.min-bet-item.lore-shift-right", "amount", 50));
+        inventory.setItem(12, createItem(Material.GOLD_NUGGET, configManager.getMessage("table-settings-gui.min-bet-item.name"), minLore));
 
         // Slot 13: Max Bet
-        int maxBet = table.getSettings().getMaxBet(plugin.getConfigManager());
+        int maxBet = table.getSettings().getMaxBet(configManager);
         List<String> maxLore = new ArrayList<>();
-        maxLore.add("§7Mevcut Maksimum: §e" + maxBet + "₺");
+        maxLore.add(configManager.formatMessage("table-settings-gui.max-bet-item.lore-current", "max_bet", maxBet));
         maxLore.add("");
-        maxLore.add("§aSol Tık: §7+100₺ artır");
-        maxLore.add("§cSağ Tık: §7-100₺ azalt");
-        maxLore.add("§eShift + Sol Tık: §7+500₺ artır");
-        maxLore.add("§eShift + Sağ Tık: §7-500₺ azalt");
-        inventory.setItem(13, createItem(Material.GOLD_INGOT, "§6§lMaksimum Bahis", maxLore));
+        maxLore.add(configManager.formatMessage("table-settings-gui.max-bet-item.lore-left", "amount", 100));
+        maxLore.add(configManager.formatMessage("table-settings-gui.max-bet-item.lore-right", "amount", 100));
+        maxLore.add(configManager.formatMessage("table-settings-gui.max-bet-item.lore-shift-left", "amount", 500));
+        maxLore.add(configManager.formatMessage("table-settings-gui.max-bet-item.lore-shift-right", "amount", 500));
+        inventory.setItem(13, createItem(Material.GOLD_INGOT, configManager.getMessage("table-settings-gui.max-bet-item.name"), maxLore));
 
         // Slot 14: Countdown Duration
         int countdown = table.getSettings().getCountdownSeconds();
         List<String> countLore = new ArrayList<>();
-        countLore.add("§7Mevcut Süre: §e" + countdown + " saniye");
+        countLore.add(configManager.formatMessage("table-settings-gui.countdown-item.lore-current", "seconds", countdown));
         countLore.add("");
-        countLore.add("§aSol Tık: §7Süreyi değiştir (5, 10, 15, 20, 30 sn)");
-        inventory.setItem(14, createItem(Material.CLOCK, "§b§lGeri Sayım Süresi", countLore));
+        countLore.add(configManager.getMessage("table-settings-gui.countdown-item.lore-click"));
+        inventory.setItem(14, createItem(Material.CLOCK, configManager.getMessage("table-settings-gui.countdown-item.name"), countLore));
 
         // Slot 16: Table Felt Material / Color
         Material currentFelt = table.getSettings().getFeltMaterial();
-        String feltDisplay = getFeltDisplayName(currentFelt);
+        String feltDisplay = configManager.getFeltDisplayName(currentFelt);
         List<String> feltLore = new ArrayList<>();
-        feltLore.add("§7Mevcut Renk: §e" + feltDisplay);
+        feltLore.add(configManager.formatMessage("table-settings-gui.felt-item.lore-current", "color", feltDisplay));
         feltLore.add("");
-        feltLore.add("§aSol Tık: §7Sonraki kumaş rengine geç");
-        feltLore.add("§cSağ Tık: §7Önceki kumaş rengine geç");
-        inventory.setItem(16, createItem(currentFelt, "§a§lMasa Örtüsü Kumaşı", feltLore));
+        feltLore.add(configManager.getMessage("table-settings-gui.felt-item.lore-left"));
+        feltLore.add(configManager.getMessage("table-settings-gui.felt-item.lore-right"));
+        inventory.setItem(16, createItem(currentFelt, configManager.getMessage("table-settings-gui.felt-item.name"), feltLore));
     }
 
     public void open() {
@@ -140,14 +140,14 @@ public class TableSettingsGUI implements InventoryHolder {
 
         // 2. Min Bet (Slot 12)
         if (slot == 12) {
-            int current = table.getSettings().getMinBet(plugin.getConfigManager());
+            int current = table.getSettings().getMinBet(configManager);
             int step = click.isShiftClick() ? 50 : 10;
             if (click.isLeftClick()) {
                 current += step;
             } else if (click.isRightClick()) {
                 current = Math.max(1, current - step);
             }
-            int max = table.getSettings().getMaxBet(plugin.getConfigManager());
+            int max = table.getSettings().getMaxBet(configManager);
             if (current > max) current = max;
 
             table.getSettings().setMinBet(current);
@@ -159,12 +159,12 @@ public class TableSettingsGUI implements InventoryHolder {
 
         // 3. Max Bet (Slot 13)
         if (slot == 13) {
-            int current = table.getSettings().getMaxBet(plugin.getConfigManager());
+            int current = table.getSettings().getMaxBet(configManager);
             int step = click.isShiftClick() ? 500 : 100;
             if (click.isLeftClick()) {
                 current += step;
             } else if (click.isRightClick()) {
-                current = Math.max(table.getSettings().getMinBet(plugin.getConfigManager()), current - step);
+                current = Math.max(table.getSettings().getMinBet(configManager), current - step);
             }
             table.getSettings().setMaxBet(current);
             saveTable();
@@ -225,18 +225,6 @@ public class TableSettingsGUI implements InventoryHolder {
             if (PRESET_SKIN_KEYS[i].equalsIgnoreCase(key)) return i;
         }
         return 0;
-    }
-
-    private String getSkinDisplayName(String key) {
-        int idx = findSkinIndex(key);
-        return PRESET_SKIN_NAMES[idx];
-    }
-
-    private String getFeltDisplayName(Material mat) {
-        for (int i = 0; i < FELT_MATERIALS.length; i++) {
-            if (FELT_MATERIALS[i] == mat) return FELT_NAMES[i];
-        }
-        return mat.name();
     }
 
     private ItemStack createItem(Material mat, String name, List<String> lore) {

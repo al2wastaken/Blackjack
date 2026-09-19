@@ -8,11 +8,10 @@ import org.bukkit.command.CommandSender;
  * Simple command that forwards to the main plugin
  */
 public class SimpleForwardCommand extends BlackjackCommand {
-    private final BlackjackPlugin plugin;
     private final String action;
     
     public SimpleForwardCommand(BlackjackPlugin plugin, String action) {
-        this.plugin = plugin;
+        super(plugin);
         this.action = action;
     }
     

@@ -202,7 +202,7 @@ public class BlackjackTable {
             // Send countdown actionbar and ticking sound to seated players
             for (Player p : players) {
                 p.spigot().sendMessage(net.md_5.bungee.api.ChatMessageType.ACTION_BAR,
-                        new net.md_5.bungee.api.chat.TextComponent("§eOyun Başlıyor: §6" + countdownRemaining + "s §7| [Space] Bahis Değiştir"));
+                        new net.md_5.bungee.api.chat.TextComponent(configManager.getCountdownActionBarMessage(countdownRemaining)));
                 if (countdownRemaining <= 5 && countdownRemaining > 0) {
                     p.playSound(p.getLocation(), Sound.BLOCK_NOTE_BLOCK_HAT, 1.0f, 1.0f);
                 }
@@ -239,7 +239,7 @@ public class BlackjackTable {
                     plugin.getEconomyProvider().subtract(p.getUniqueId(), BigDecimal.valueOf(minBet));
                     plugin.getPlayerBets().put(p, minBet);
                     roundBets.put(p, minBet);
-                    p.sendMessage("§eGeri sayım bittiği için otomatik minimum bahis (§a" + minBet + "₺§e) yatırıldı.");
+                    p.sendMessage(configManager.formatMessage("table-events.auto-bet-countdown", "min_bet", minBet));
                     p.playSound(p.getLocation(), Sound.BLOCK_NOTE_BLOCK_CHIME, 1.0f, 1.0f);
                 } else {
                     toRemove.add(p);
@@ -248,8 +248,8 @@ public class BlackjackTable {
         }
 
         for (Player p : toRemove) {
-            p.sendMessage("§cMinimum bahsi (" + minBet + "₺) karşılayacak bakiyeniz olmadığı için masadan kaldırıldınız!");
-            removePlayer(p, "Yetersiz Bakiye", false);
+            p.sendMessage(configManager.formatMessage("table-events.removed-cannot-afford-min", "min_bet", minBet));
+            removePlayer(p, configManager.getLeaveReason("insufficient-funds"), false);
         }
 
         if (!players.isEmpty()) {
@@ -419,7 +419,7 @@ public class BlackjackTable {
                 plugin.getPlayerBets().remove(player);
                 roundBets.remove(player);
                 plugin.getEconomyProvider().add(player.getUniqueId(), BigDecimal.valueOf(betAmount));
-                player.sendMessage("§aMasadan kalktınız. Bahsiniz (§e" + betAmount + "₺§a) eksiksiz iade edildi.");
+                player.sendMessage(configManager.formatMessage("left-table-bet-refunded", "amount", betAmount));
             }
             // Once the croupier begins dealing, an early departure always
             // forfeits the active bet. This intentionally overrides the
@@ -811,7 +811,7 @@ public class BlackjackTable {
                     return;
                 }
                 finishedPlayers.add(player);
-                broadcastTableMessage("§e" + player.getName() + " §7hamle süresini doldurdu; eli pas geçildi.");
+                broadcastTableMessage(configManager.formatMessage("table-events.player-turn-timeout", "player", player.getName()));
                 nextTurn();
             }
         }, 20L, 20L);
@@ -825,7 +825,7 @@ public class BlackjackTable {
     }
 
     private void updatePlayerTurnBossBars(Player activePlayer) {
-        String title = "§fSıra: §e" + activePlayer.getName() + " §7| §f" + turnSecondsRemaining + " saniye";
+        String title = configManager.getTurnBossBarTitle(activePlayer.getName(), turnSecondsRemaining);
         double progress = Math.max(0.0, Math.min(1.0, turnSecondsRemaining / (double) TURN_TIMEOUT_SECONDS));
         for (Player viewer : players) {
             if (!viewer.isOnline()) continue;
@@ -840,11 +840,12 @@ public class BlackjackTable {
     }
 
     private void showCroupierTurnBossBars() {
+        String title = configManager.getDealerDrawingBossBarTitle();
         for (Player viewer : players) {
             if (!viewer.isOnline()) continue;
             BossBar bar = turnBossBars.computeIfAbsent(viewer.getUniqueId(), ignored ->
-                    Bukkit.createBossBar("§fKrupiyer kart çekiyor...", BarColor.WHITE, BarStyle.SOLID));
-            bar.setTitle("§fKrupiyer kart çekiyor...");
+                    Bukkit.createBossBar(title, BarColor.WHITE, BarStyle.SOLID));
+            bar.setTitle(title);
             bar.setColor(BarColor.WHITE);
             bar.setProgress(1.0);
             if (!bar.getPlayers().contains(viewer)) bar.addPlayer(viewer);
@@ -888,7 +889,7 @@ public class BlackjackTable {
                 updateDealerDisplays();
 
                 int initialVal = gameEngine.calculateHandValue(dealerHand);
-                broadcastTableMessage("§6[Kasa] §eİlk el açıldı: §f" + formatHand(dealerHand) + " §7(Değer: §e" + initialVal + "§7)");
+                broadcastTableMessage(configManager.formatMessage("table-events.dealer-initial-hand", "hand", formatHand(dealerHand), "value", initialVal));
 
                 // STEP 2: Cinematic paced dealer draw loop (1.5s per card)
                 runDealerDrawStep(anyValidPlayers);
@@ -909,7 +910,7 @@ public class BlackjackTable {
                 updateDealerDisplays();
 
                 int currentVal = gameEngine.calculateHandValue(dealerHand);
-                broadcastTableMessage("§6[Kasa] §eKart çekti: §f" + formatCard(newCard) + " §7(Toplam: §e" + currentVal + "§7)");
+                broadcastTableMessage(configManager.formatMessage("table-events.dealer-draw-card", "card", formatCard(newCard), "value", currentVal));
 
                 // Wait 1.5 seconds (30 ticks) before next card or finish check
                 runDealerDrawStep(anyValidPlayers);
@@ -951,7 +952,7 @@ public class BlackjackTable {
                 Bukkit.getScheduler().runTaskLater(plugin, () -> {
                     if (!gameInProgress && !settlingResults && !players.isEmpty() && countdownTask == null) {
                         for (Player p : players) {
-                            p.sendMessage("§eYeni el hazırlanıyor... Bahsinizi değiştirmek için §a[Space] §etuşuna basabilirsiniz.");
+                            p.sendMessage(configManager.getMessage("table-events.round-preparing-hint"));
                         }
                         startCountdown();
                     }
@@ -979,12 +980,8 @@ public class BlackjackTable {
     private void updateCroupierIdleDisplay() {
         if (croupierNPC == null) return;
         int capacity = chairs.isEmpty() ? 5 : chairs.size();
-        croupierNPC.updateScoreDisplay(
-                "§6§lBLACKJACK\n" +
-                "§7Krupiye 17'de durur ve 16'da kart çeker\n" +
-                "§eAnında 21, 2.5x ödeme yapar\n\n" +
-                "§aKatılmak için sağ tıkla! §7(" + players.size() + "/" + capacity + ")"
-        );
+        List<String> rules = configManager.getHologramRules(players.size(), capacity);
+        croupierNPC.updateScoreDisplay(String.join("\n", rules.get(0), rules.get(1), rules.get(2), "", rules.get(3)));
     }
     
     private void handlePayout(Player player, int dealerValue) {
@@ -1423,20 +1420,13 @@ public class BlackjackTable {
         }
 
         int val = gameEngine.calculateHandValue(hand);
-        String text;
-        if (gameEngine.isBusted(hand)) {
-            text = "§c§lEl: " + val + " §4(PATLADI)";
-        } else if (val == 21 && hand.size() == 2) {
-            text = "§6§lEl: 21 §a★ BLACKJACK";
-        } else if (val == 21) {
-            text = "§6§lEl: 21 §a★";
-        } else {
-            text = "§a§lEl: §f" + val + " §7/ 21";
-        }
+        boolean isBusted = gameEngine.isBusted(hand);
+        boolean isBlackjack = (val == 21 && hand.size() == 2);
+        String text = configManager.formatHandDisplay(val, isBusted, isBlackjack);
 
         if (gameInProgress && player.equals(currentPlayer)) {
             boolean canDouble = hand.size() == 2 && !doubleDownPlayers.contains(player) && configManager.isDoubleDownEnabled();
-            text += "\n§e[Sol Tık: Çek §7| §eSağ Tık: Pas" + (canDouble ? " §7| §eİkiye katla: Boşluk]" : "]");
+            text += "\n" + configManager.getDeskControls(canDouble);
         }
 
         display.setText(text);
@@ -1486,16 +1476,10 @@ public class BlackjackTable {
         if (croupierNPC != null) {
             if (gameInProgress && !settlingResults && dealerHand.size() >= 2) {
                 Card visibleCard = dealerHand.get(0);
-                croupierNPC.updateScoreDisplay("§6§lKASA: §e" + visibleCard.getValue());
+                croupierNPC.updateScoreDisplay(configManager.formatDealerScoreDisplay(visibleCard.getValue(), false, false, true));
             } else {
                 int total = gameEngine.calculateHandValue(dealerHand);
-                if (total > 21) {
-                    croupierNPC.updateScoreDisplay("§c§lKASA: §4" + total + " (PATLADI)");
-                } else if (total == 21) {
-                    croupierNPC.updateScoreDisplay("§6§lKASA: §e21 §6★");
-                } else {
-                    croupierNPC.updateScoreDisplay("§6§lKASA: §f" + total);
-                }
+                croupierNPC.updateScoreDisplay(configManager.formatDealerScoreDisplay(total, total > 21, total == 21, false));
             }
         }
     }

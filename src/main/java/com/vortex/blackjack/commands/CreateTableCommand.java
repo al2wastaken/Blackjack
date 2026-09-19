@@ -18,10 +18,8 @@ public class CreateTableCommand extends BlackjackCommand {
             "min-bet:", "max-bet:", "max-players:", "max-join-distance:"
     );
 
-    private final BlackjackPlugin plugin;
-
     public CreateTableCommand(BlackjackPlugin plugin) {
-        this.plugin = plugin;
+        super(plugin);
     }
 
     @Override

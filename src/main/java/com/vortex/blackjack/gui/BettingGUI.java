@@ -1,6 +1,7 @@
 package com.vortex.blackjack.gui;
 
 import com.vortex.blackjack.BlackjackPlugin;
+import com.vortex.blackjack.config.ConfigManager;
 import com.vortex.blackjack.table.BlackjackTable;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
@@ -26,6 +27,7 @@ public class BettingGUI implements InventoryHolder {
     private final BlackjackPlugin plugin;
     private final BlackjackTable table;
     private final Player player;
+    private final ConfigManager configManager;
     private final Inventory inventory;
 
     private static final int[] CHIP_VALUES = {10, 25, 50, 100, 250, 500};
@@ -42,40 +44,41 @@ public class BettingGUI implements InventoryHolder {
         this.plugin = plugin;
         this.table = table;
         this.player = player;
-        this.inventory = Bukkit.createInventory(this, 27, "§8Kumarhane Bahis Menüsü");
+        this.configManager = plugin.getConfigManager();
+        this.inventory = Bukkit.createInventory(this, 27, configManager.getMessage("betting-gui.title"));
         buildInventory();
     }
 
     private void buildInventory() {
-        ItemStack bg = createItem(Material.GRAY_STAINED_GLASS_PANE, "§7", null);
+        ItemStack bg = createItem(Material.GRAY_STAINED_GLASS_PANE, " ", null);
         for (int i = 0; i < 27; i++) {
             inventory.setItem(i, bg);
         }
 
-        int minBet = table.getSettings().getMinBet(plugin.getConfigManager());
-        int maxBet = table.getSettings().getMaxBet(plugin.getConfigManager());
+        int minBet = table.getSettings().getMinBet(configManager);
+        int maxBet = table.getSettings().getMaxBet(configManager);
         Integer currentBet = plugin.getPlayerBets().get(player);
         double balance = plugin.getEconomyProvider().getBalance(player.getUniqueId()).doubleValue();
 
         // Slot 4: Info Header
         List<String> infoLore = new ArrayList<>();
-        infoLore.add("§7Masa Minimum: §f" + minBet + "₺");
-        infoLore.add("§7Masa Maksimum: §f" + maxBet + "₺");
-        infoLore.add("§7Bakiyeniz: §a" + String.format("%.2f", balance) + "₺");
+        infoLore.add(configManager.formatMessage("betting-gui.info-item.lore-min-bet", "min_bet", minBet));
+        infoLore.add(configManager.formatMessage("betting-gui.info-item.lore-max-bet", "max_bet", maxBet));
+        infoLore.add(configManager.formatMessage("betting-gui.info-item.lore-balance", "balance", String.format("%.2f", balance)));
         infoLore.add("");
         if (currentBet != null && currentBet > 0) {
-            infoLore.add("§aŞu Anki Bahsiniz: §e" + currentBet + "₺");
-            infoLore.add("§7(Yeni bir çip seçerek bahsinizi değiştirebilirsiniz)");
+            infoLore.add(configManager.formatMessage("betting-gui.info-item.lore-current-bet", "current_bet", currentBet));
+            infoLore.add(configManager.getMessage("betting-gui.info-item.lore-change-bet"));
         } else {
-            infoLore.add("§cHenüz bahis koymadınız.");
-            infoLore.add("§7Aşağıdaki çiplerden birini seçin veya");
-            infoLore.add("§7özel bir miktar belirleyin.");
+            infoLore.add(configManager.getMessage("betting-gui.info-item.lore-no-bet"));
+            infoLore.add(configManager.getMessage("betting-gui.info-item.lore-select-chip-1"));
+            infoLore.add(configManager.getMessage("betting-gui.info-item.lore-select-chip-2"));
         }
         infoLore.add("");
-        infoLore.add("§8Kartlar dağıtılmadan önce [Space] ile");
-        infoLore.add("§8bu menüyü tekrar açabilirsiniz.");
+        infoLore.add(configManager.getMessage("betting-gui.info-item.lore-footer-1"));
+        infoLore.add(configManager.getMessage("betting-gui.info-item.lore-footer-2"));
 
-        ItemStack infoItem = createItem(Material.NETHER_STAR, "§6§lMasa ve Bahis Bilgisi", infoLore);
+        ItemStack infoItem = createItem(Material.NETHER_STAR, configManager.getMessage("betting-gui.info-item.name"), infoLore);
         inventory.setItem(4, infoItem);
 
         // Slots 10..15: Preset Chips
@@ -84,37 +87,37 @@ public class BettingGUI implements InventoryHolder {
             Material mat = CHIP_MATERIALS[i];
 
             List<String> chipLore = new ArrayList<>();
-            chipLore.add("§7Değer: §a" + value + "₺");
+            chipLore.add(configManager.formatMessage("betting-gui.chip.lore-value", "amount", value));
             if (value < minBet) {
-                chipLore.add("§c(Masa minimumu " + minBet + "₺)");
+                chipLore.add(configManager.formatMessage("betting-gui.chip.lore-min-limit", "min_bet", minBet));
             } else if (value > maxBet) {
-                chipLore.add("§c(Masa maksimumu " + maxBet + "₺)");
+                chipLore.add(configManager.formatMessage("betting-gui.chip.lore-max-limit", "max_bet", maxBet));
             } else {
-                chipLore.add("§eTıkla: Bahis olarak " + value + "₺ yatır");
+                chipLore.add(configManager.formatMessage("betting-gui.chip.lore-click", "amount", value));
             }
-            inventory.setItem(10 + i, createItem(mat, "§e§l" + value + "₺ Çip", chipLore));
+            inventory.setItem(10 + i, createItem(mat, configManager.formatMessage("betting-gui.chip.name", "amount", value), chipLore));
         }
 
         // Slot 16: Custom Bet (SignGUI)
         List<String> customLore = new ArrayList<>();
-        customLore.add("§7Kendi istediğiniz bahis miktarını");
-        customLore.add("§7tabela arayüzüne yazmak için tıklayın.");
+        customLore.add(configManager.getMessage("betting-gui.custom-bet.lore-1"));
+        customLore.add(configManager.getMessage("betting-gui.custom-bet.lore-2"));
         customLore.add("");
-        customLore.add("§eTıkla: Özel miktar gir");
-        inventory.setItem(16, createItem(Material.OAK_SIGN, "§b§lÖzel Bahis (Custom Bet)", customLore));
+        customLore.add(configManager.getMessage("betting-gui.custom-bet.lore-click"));
+        inventory.setItem(16, createItem(Material.OAK_SIGN, configManager.getMessage("betting-gui.custom-bet.name"), customLore));
 
         // Slot 22: Wait / Later
         List<String> waitLore = new ArrayList<>();
-        waitLore.add("§7Şimdilik bahis koymadan masada bekleyin.");
-        waitLore.add("§7Geri sayım bitmeden önce §e[Space] §7tuşuna");
-        waitLore.add("§7basarak istediğiniz an bahis yapabilirsiniz.");
+        waitLore.add(configManager.getMessage("betting-gui.wait-button.lore-1"));
+        waitLore.add(configManager.getMessage("betting-gui.wait-button.lore-2"));
+        waitLore.add(configManager.getMessage("betting-gui.wait-button.lore-3"));
         waitLore.add("");
-        waitLore.add("§c⚠ Not: Geri sayım bittiğinde hala bahis");
-        waitLore.add("§cyapmadıysanız otomatik olarak minimum");
-        waitLore.add("§cbahis (§e" + minBet + "₺§c) alınacaktır.");
+        waitLore.add(configManager.getMessage("betting-gui.wait-button.lore-warn-1"));
+        waitLore.add(configManager.getMessage("betting-gui.wait-button.lore-warn-2"));
+        waitLore.add(configManager.formatMessage("betting-gui.wait-button.lore-warn-3", "min_bet", minBet));
         waitLore.add("");
-        waitLore.add("§eTıkla: Menüyü kapat ve bekle");
-        inventory.setItem(22, createItem(Material.CLOCK, "§e§lBekle (Sonra Belirle)", waitLore));
+        waitLore.add(configManager.getMessage("betting-gui.wait-button.lore-click"));
+        inventory.setItem(22, createItem(Material.CLOCK, configManager.getMessage("betting-gui.wait-button.name"), waitLore));
     }
 
     public void open() {
@@ -126,7 +129,7 @@ public class BettingGUI implements InventoryHolder {
         int slot = event.getRawSlot();
 
         if (table.isGameInProgress()) {
-            player.sendMessage("§cOyun başladıktan sonra bahis değiştirilemez!");
+            player.sendMessage(configManager.getMessage("betting-gui.messages.game-in-progress"));
             player.closeInventory();
             return;
         }
@@ -149,23 +152,23 @@ public class BettingGUI implements InventoryHolder {
         // Clicked Wait (slot 22)
         if (slot == 22) {
             player.closeInventory();
-            player.sendMessage("§eMasada bekliyorsunuz. Geri sayım bitmeden önce §a[Space] §etuşuna basarak bahsinizi belirleyebilirsiniz.");
+            player.sendMessage(configManager.getMessage("betting-gui.messages.waiting"));
             player.playSound(player.getLocation(), Sound.UI_BUTTON_CLICK, 1.0f, 1.0f);
         }
     }
 
     public void applyBet(int amount) {
-        int minBet = table.getSettings().getMinBet(plugin.getConfigManager());
-        int maxBet = table.getSettings().getMaxBet(plugin.getConfigManager());
+        int minBet = table.getSettings().getMinBet(configManager);
+        int maxBet = table.getSettings().getMaxBet(configManager);
 
         if (amount < minBet) {
-            player.sendMessage("§cBu masada minimum bahis " + minBet + "₺!");
+            player.sendMessage(configManager.formatMessage("betting-gui.messages.min-bet-error", "min_bet", minBet));
             player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_NO, 1.0f, 1.0f);
             return;
         }
 
         if (amount > maxBet) {
-            player.sendMessage("§cBu masada maksimum bahis " + maxBet + "₺!");
+            player.sendMessage(configManager.formatMessage("betting-gui.messages.max-bet-error", "max_bet", maxBet));
             player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_NO, 1.0f, 1.0f);
             return;
         }
@@ -178,7 +181,7 @@ public class BettingGUI implements InventoryHolder {
         int needed = amount - currentVal;
 
         if (needed > 0 && balance < needed) {
-            player.sendMessage("§cYetersiz bakiye! " + amount + "₺ yatırmak için " + needed + "₺ daha gereklidir.");
+            player.sendMessage(configManager.formatMessage("betting-gui.messages.insufficient-funds", "amount", amount, "needed", needed));
             player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_NO, 1.0f, 1.0f);
             return;
         }
@@ -194,13 +197,13 @@ public class BettingGUI implements InventoryHolder {
         plugin.getPlayerPersistentBets().put(player, amount);
         table.setPlayerRoundBet(player, amount);
 
-        player.sendMessage("§aBahsiniz §e" + amount + "₺ §aolarak yatırıldı! Kartların dağıtılması bekleniyor...");
+        player.sendMessage(configManager.formatMessage("betting-gui.messages.bet-placed", "amount", amount));
         player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_CHIME, 1.0f, 1.5f);
         player.closeInventory();
     }
 
     private void openCustomBetSign() {
-        player.sendMessage("§eLütfen açılan tabelaya bahis miktarını yazın ve Tamam'a basın...");
+        player.sendMessage(configManager.getMessage("betting-gui.messages.custom-bet-prompt"));
         SignGUI.open(plugin, player, lines -> {
             if (!player.isOnline()) return;
 
@@ -216,7 +219,7 @@ public class BettingGUI implements InventoryHolder {
             // Strip any currency signs or letters
             input = input.replaceAll("[^0-9]", "");
             if (input.isEmpty()) {
-                player.sendMessage("§cGeçersiz sayı girdiniz! Bahis ayarlanamadı.");
+                player.sendMessage(configManager.getMessage("betting-gui.messages.invalid-number"));
                 player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_NO, 1.0f, 1.0f);
                 return;
             }
@@ -225,7 +228,7 @@ public class BettingGUI implements InventoryHolder {
                 int amount = Integer.parseInt(input);
                 applyBet(amount);
             } catch (NumberFormatException e) {
-                player.sendMessage("§cGeçersiz miktar: " + input);
+                player.sendMessage(configManager.formatMessage("betting-gui.messages.invalid-amount", "input", input));
                 player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_NO, 1.0f, 1.0f);
             }
         });

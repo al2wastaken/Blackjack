@@ -50,10 +50,7 @@ public class ChatUtils {
      * Create a game action bar with clickable options
      */
     public void sendGameActionBar(Player player, boolean showDoubleDown) {
-        String message = "§aSol Tık: Çek §7| §eSağ Tık: Pas";
-        if (showDoubleDown && configManager.isDoubleDownEnabled()) {
-            message += " §7| §bSpace: İkiye Katla";
-        }
+        String message = configManager.getGameActionBarMessage(showDoubleDown);
         player.spigot().sendMessage(ChatMessageType.ACTION_BAR, new TextComponent(message));
     }
     
