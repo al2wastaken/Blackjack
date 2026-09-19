@@ -295,6 +295,20 @@ public class TableManager {
     }
 
     /**
+     * Get collection of all active tables
+     */
+    public java.util.Collection<BlackjackTable> getTables() {
+        return tables.values();
+    }
+
+    /**
+     * Persist updated settings for an existing table.
+     */
+    public void saveTable(BlackjackTable table) {
+        saveTableSettings(table);
+    }
+
+    /**
      * Persist updated settings for an existing table (used by /bj settable).
      */
     public void saveTableSettings(BlackjackTable table) {

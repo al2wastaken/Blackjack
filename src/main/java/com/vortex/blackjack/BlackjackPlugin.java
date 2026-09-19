@@ -70,6 +70,15 @@ public class BlackjackPlugin extends JavaPlugin implements Listener {
     private File statsFile;
     
     @Override
+    public void onLoad() {
+        com.github.retrooper.packetevents.PacketEvents.setAPI(
+                io.github.retrooper.packetevents.factory.spigot.SpigotPacketEventsBuilder.build(this)
+        );
+        com.github.retrooper.packetevents.PacketEvents.getAPI().getSettings().checkForUpdates(false).bStats(false);
+        com.github.retrooper.packetevents.PacketEvents.getAPI().load();
+    }
+
+    @Override
     public void onEnable() {
         // Create and update configuration files before managers read them.
         saveDefaultConfig();
@@ -152,13 +161,19 @@ public class BlackjackPlugin extends JavaPlugin implements Listener {
         int statsSaveInterval = configManager.getStatsSaveInterval();
         long ticks = statsSaveInterval * 20L; // Convert seconds to ticks (20 ticks = 1 second)
         asyncUtils.scheduleRepeating("stats-autosave", this::savePlayerStats, ticks, ticks);
-        getLogger().info("Stats auto-save scheduled every " + statsSaveInterval + " seconds");
-        
+        // Initialize PacketEvents
+        com.github.retrooper.packetevents.PacketEvents.getAPI().init();
+        com.github.retrooper.packetevents.PacketEvents.getAPI().getEventManager()
+                .registerListener(new com.vortex.blackjack.listener.PacketEventsListener(this));
+
         getLogger().info("Blackjack enabled successfully!");
     }
     
     @Override
     public void onDisable() {
+        // Terminate PacketEvents
+        com.github.retrooper.packetevents.PacketEvents.getAPI().terminate();
+
         // Unregister PlaceholderAPI expansion
         if (placeholderExpansion != null) {
             placeholderExpansion.unregister();
@@ -487,14 +502,6 @@ public class BlackjackPlugin extends JavaPlugin implements Listener {
             case "createtable" -> handleCreateTable(player, args);
             case "settable" -> handleSetTable(player, args);
             case "removetable" -> handleRemoveTable(player);
-            case "join" -> handleJoin(player);
-            case "leave" -> handleLeave(player);
-            case "start" -> handleStart(player);
-            case "hit" -> handleHit(player);
-            case "stand" -> handleStand(player);
-            case "doubledown", "dd" -> handleDoubleDown(player);
-            case "bet" -> handleBet(player, args);
-            case "stats" -> handleStats(player, args);
             case "reload" -> handleReload(player);
             case "version" -> handleVersion(player);
             default -> {
@@ -946,27 +953,17 @@ public class BlackjackPlugin extends JavaPlugin implements Listener {
     }
     
     private void sendHelp(Player player) {
+        if (!player.hasPermission("blackjack.admin")) {
+            player.sendMessage(configManager.getMessage("no-permission"));
+            return;
+        }
+
         player.sendMessage(configManager.getMessage("prefix") + configManager.getMessage("help-header"));
-        
-        if (player.hasPermission("blackjack.admin")) {
-            player.sendMessage(configManager.getMessage("help-admin-create"));
-            player.sendMessage(configManager.getMessage("help-admin-settable"));
-            player.sendMessage(configManager.getMessage("help-admin-remove"));
-            player.sendMessage(configManager.getMessage("help-admin-reload"));
-            player.sendMessage(configManager.getMessage("help-admin-version"));
-        }
-        
-        player.sendMessage(configManager.getMessage("help-join"));
-        player.sendMessage(configManager.getMessage("help-leave"));
-        player.sendMessage(configManager.getMessage("help-bet"));
-        player.sendMessage(configManager.getMessage("help-start"));
-        player.sendMessage(configManager.getMessage("help-hit"));
-        player.sendMessage(configManager.getMessage("help-stand"));
-        player.sendMessage(configManager.getMessage("help-stats"));
-        
-        if (player.hasPermission("blackjack.stats.others")) {
-            player.sendMessage(configManager.getMessage("help-stats-others"));
-        }
+        player.sendMessage(configManager.getMessage("help-admin-create"));
+        player.sendMessage(configManager.getMessage("help-admin-settable"));
+        player.sendMessage(configManager.getMessage("help-admin-remove"));
+        player.sendMessage(configManager.getMessage("help-admin-reload"));
+        player.sendMessage(configManager.getMessage("help-admin-version"));
     }
 
     @Override
@@ -975,31 +972,21 @@ public class BlackjackPlugin extends JavaPlugin implements Listener {
             return Collections.emptyList();
         }
 
+        if (!sender.hasPermission("blackjack.admin")) {
+            return Collections.emptyList();
+        }
+
         if (args.length == 1) {
             List<String> completions = new ArrayList<>();
-            completions.add("join");
-            completions.add("leave");
-            completions.add("bet");
-            completions.add("start");
-            completions.add("hit");
-            completions.add("stand");
-            completions.add("doubledown");
-            completions.add("stats");
-
-            if (sender.hasPermission("blackjack.admin")) {
-                completions.add("createtable");
-                completions.add("settable");
-                completions.add("removetable");
-                completions.add("reload");
-                completions.add("version");
-            }
-
+            completions.add("createtable");
+            completions.add("settable");
+            completions.add("removetable");
+            completions.add("reload");
+            completions.add("version");
             return filterCompletions(completions, args[0]);
         }
 
-        if (sender.hasPermission("blackjack.admin")
-            && args[0].equalsIgnoreCase("createtable")
-            && args.length >= 2) {
+        if (args[0].equalsIgnoreCase("createtable") && args.length >= 2) {
             List<String> settingKeys = new ArrayList<>();
             settingKeys.add("min-bet:");
             settingKeys.add("max-bet:");
@@ -1017,9 +1004,7 @@ public class BlackjackPlugin extends JavaPlugin implements Listener {
             return filterCompletions(settingKeys, args[args.length - 1]);
         }
 
-        if (sender instanceof Player player
-            && player.hasPermission("blackjack.admin")
-            && args[0].equalsIgnoreCase("settable")) {
+        if (sender instanceof Player player && args[0].equalsIgnoreCase("settable")) {
             if (args.length == 2) {
                 List<String> settings = new ArrayList<>();
                 settings.add("min-bet");
@@ -1035,23 +1020,6 @@ public class BlackjackPlugin extends JavaPlugin implements Listener {
                     return filterCompletions(List.of(currentValue), args[2]);
                 }
             }
-        }
-
-        if (args.length == 2 && args[0].equalsIgnoreCase("bet")) {
-            List<String> completions = new ArrayList<>();
-            configManager.getSmallBets().forEach(amount -> completions.add(amount.toString()));
-            configManager.getMediumBets().forEach(amount -> completions.add(amount.toString()));
-            configManager.getLargeBets().forEach(amount -> completions.add(amount.toString()));
-            return filterCompletions(completions, args[1]);
-        }
-
-        if (args.length == 2 && args[0].equalsIgnoreCase("stats")
-            && sender.hasPermission("blackjack.stats.others")) {
-            List<String> completions = new ArrayList<>();
-            for (Player onlinePlayer : getServer().getOnlinePlayers()) {
-                completions.add(onlinePlayer.getName());
-            }
-            return filterCompletions(completions, args[1]);
         }
 
         return Collections.emptyList();

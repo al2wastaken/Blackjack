@@ -136,9 +136,23 @@ public class DatabaseManager {
                             "max_bet INT, " +
                             "max_players INT, " +
                             "max_join_distance DOUBLE, " +
+                            "croupier_skin VARCHAR(255) DEFAULT 'classic', " +
+                            "countdown_seconds INT DEFAULT 15, " +
+                            "felt_color VARCHAR(32) DEFAULT 'GREEN_WOOL', " +
                             "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP" +
                             ");"
             );
+
+            // Migrations for existing tables
+            try {
+                stmt.executeUpdate("ALTER TABLE blackjack_tables ADD COLUMN croupier_skin VARCHAR(255) DEFAULT 'classic'");
+            } catch (SQLException ignored) {}
+            try {
+                stmt.executeUpdate("ALTER TABLE blackjack_tables ADD COLUMN countdown_seconds INT DEFAULT 15");
+            } catch (SQLException ignored) {}
+            try {
+                stmt.executeUpdate("ALTER TABLE blackjack_tables ADD COLUMN felt_color VARCHAR(32) DEFAULT 'GREEN_WOOL'");
+            } catch (SQLException ignored) {}
 
             // Player stats schema
             stmt.executeUpdate(
@@ -165,7 +179,7 @@ public class DatabaseManager {
 
     public List<TableRecord> loadAllTables() {
         List<TableRecord> result = new ArrayList<>();
-        String query = "SELECT id, world, x, y, z, yaw, pitch, min_bet, max_bet, max_players, max_join_distance FROM blackjack_tables";
+        String query = "SELECT id, world, x, y, z, yaw, pitch, min_bet, max_bet, max_players, max_join_distance, croupier_skin, countdown_seconds, felt_color FROM blackjack_tables";
 
         try (Connection conn = getConnection();
              PreparedStatement ps = conn.prepareStatement(query);
@@ -184,8 +198,14 @@ public class DatabaseManager {
                 Integer maxBet = (Integer) rs.getObject("max_bet");
                 Integer maxPlayers = (Integer) rs.getObject("max_players");
                 Double maxDist = (Double) rs.getObject("max_join_distance");
+                String croupierSkin = rs.getString("croupier_skin");
+                Integer countdown = (Integer) rs.getObject("countdown_seconds");
+                String feltColor = rs.getString("felt_color");
 
-                result.add(new TableRecord(id, world, x, y, z, yaw, pitch, minBet, maxBet, maxPlayers, maxDist));
+                result.add(new TableRecord(id, world, x, y, z, yaw, pitch, minBet, maxBet, maxPlayers, maxDist,
+                        croupierSkin != null ? croupierSkin : "classic",
+                        countdown != null ? countdown : 15,
+                        feltColor != null ? feltColor : "GREEN_WOOL"));
             }
         } catch (SQLException e) {
             plugin.getLogger().log(Level.SEVERE, "Error loading tables from database", e);
@@ -196,13 +216,14 @@ public class DatabaseManager {
     public void saveTable(TableRecord table) {
         String upsert;
         if ("MYSQL".equals(databaseType)) {
-            upsert = "INSERT INTO blackjack_tables (id, world, x, y, z, yaw, pitch, min_bet, max_bet, max_players, max_join_distance) " +
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) " +
+            upsert = "INSERT INTO blackjack_tables (id, world, x, y, z, yaw, pitch, min_bet, max_bet, max_players, max_join_distance, croupier_skin, countdown_seconds, felt_color) " +
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) " +
                     "ON DUPLICATE KEY UPDATE min_bet = VALUES(min_bet), max_bet = VALUES(max_bet), " +
-                    "max_players = VALUES(max_players), max_join_distance = VALUES(max_join_distance)";
+                    "max_players = VALUES(max_players), max_join_distance = VALUES(max_join_distance), " +
+                    "croupier_skin = VALUES(croupier_skin), countdown_seconds = VALUES(countdown_seconds), felt_color = VALUES(felt_color)";
         } else {
-            upsert = "INSERT OR REPLACE INTO blackjack_tables (id, world, x, y, z, yaw, pitch, min_bet, max_bet, max_players, max_join_distance) " +
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+            upsert = "INSERT OR REPLACE INTO blackjack_tables (id, world, x, y, z, yaw, pitch, min_bet, max_bet, max_players, max_join_distance, croupier_skin, countdown_seconds, felt_color) " +
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         }
 
         try (Connection conn = getConnection(); PreparedStatement ps = conn.prepareStatement(upsert)) {
@@ -217,6 +238,9 @@ public class DatabaseManager {
             ps.setObject(9, table.getMaxBet());
             ps.setObject(10, table.getMaxPlayers());
             ps.setObject(11, table.getMaxJoinDistance());
+            ps.setString(12, table.getCroupierSkin());
+            ps.setObject(13, table.getCountdownSeconds());
+            ps.setString(14, table.getFeltColor());
 
             ps.executeUpdate();
         } catch (SQLException e) {

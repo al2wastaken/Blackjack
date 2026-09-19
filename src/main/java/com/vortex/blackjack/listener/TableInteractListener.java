@@ -47,6 +47,32 @@ public class TableInteractListener implements Listener {
         handleEntityInteraction(event.getPlayer(), event.getRightClicked(), event);
     }
 
+    @EventHandler(priority = EventPriority.HIGH)
+    public void onPlayerInteract(org.bukkit.event.player.PlayerInteractEvent event) {
+        Player player = event.getPlayer();
+        BlackjackTable table = tableManager.getPlayerTable(player);
+        if (table == null || !table.isGameInProgress() || !table.isPlayerTurn(player)) {
+            return;
+        }
+
+        org.bukkit.event.block.Action action = event.getAction();
+        if (action == org.bukkit.event.block.Action.LEFT_CLICK_AIR || action == org.bukkit.event.block.Action.LEFT_CLICK_BLOCK) {
+            event.setCancelled(true);
+            if (player.isSneaking()) {
+                table.doubleDown(player);
+            } else {
+                table.hit(player);
+            }
+        } else if (action == org.bukkit.event.block.Action.RIGHT_CLICK_AIR || action == org.bukkit.event.block.Action.RIGHT_CLICK_BLOCK) {
+            event.setCancelled(true);
+            if (player.isSneaking()) {
+                table.doubleDown(player);
+            } else {
+                table.stand(player);
+            }
+        }
+    }
+
     private void handleEntityInteraction(Player player, Entity entity, org.bukkit.event.Cancellable event) {
         Set<String> tags = entity.getScoreboardTags();
         if (!tags.contains("blackjack-entity")) {
@@ -54,6 +80,29 @@ public class TableInteractListener implements Listener {
         }
 
         event.setCancelled(true);
+
+        // Turn controls for seated player clicking table/chair
+        BlackjackTable seatedTable = tableManager.getPlayerTable(player);
+        if (seatedTable != null && seatedTable.isGameInProgress() && seatedTable.isPlayerTurn(player)) {
+            if (player.isSneaking()) {
+                seatedTable.doubleDown(player);
+            } else {
+                seatedTable.stand(player);
+            }
+            return;
+        }
+
+        // Admin Shift + Right-Click to open TableSettingsGUI
+        if (player.isSneaking() && player.hasPermission("blackjack.admin")) {
+            BlackjackTable table = findTableFromTags(tags);
+            if (table == null) {
+                table = tableManager.findNearestTable(entity.getLocation());
+            }
+            if (table != null) {
+                new com.vortex.blackjack.gui.TableSettingsGUI(plugin, table, player).open();
+                return;
+            }
+        }
 
         // If chair sitting is disabled in config, ignore click to sit
         if (!plugin.getConfigManager().isChairSittingEnabled()) {
@@ -86,7 +135,7 @@ public class TableInteractListener implements Listener {
         if (seatIndex != null) {
             table.addPlayer(player, seatIndex);
         } else {
-            // Clicked table body, interaction hitbox, or hologram -> find nearest available seat
+            // Clicked table body, interaction hitbox, or model -> find nearest available seat
             table.addPlayer(player, -1);
         }
     }
@@ -113,14 +162,14 @@ public class TableInteractListener implements Listener {
         BlackjackTable table = tableManager.getPlayerTable(player);
         if (table != null) {
             Integer bet = plugin.getPlayerBets().get(player);
-            if (plugin.getConfigManager().isLeaveConfirmGuiEnabled() && bet != null && bet > 0) {
-                // If LeaveConfirmGUI is already open, ignore repeated dismount events
+            // Only require confirmation and forfeit if game is actively in progress
+            if (table.isGameInProgress() && plugin.getConfigManager().isLeaveConfirmGuiEnabled() && bet != null && bet > 0) {
                 if (player.getOpenInventory().getTopInventory().getHolder() instanceof com.vortex.blackjack.gui.LeaveConfirmGUI) {
                     event.setCancelled(true);
                     return;
                 }
 
-                // Player placed a bet! Cancel dismount to keep player seated and open confirmation GUI
+                // Player placed a bet and cards are dealt! Cancel dismount and prompt confirmation GUI
                 event.setCancelled(true);
 
                 plugin.getServer().getScheduler().runTask(plugin, () -> {
@@ -134,7 +183,7 @@ public class TableInteractListener implements Listener {
                 return;
             }
 
-            // Remove player cleanly from table
+            // Before cards are dealt, dismounting gives 100% full refund automatically
             table.removePlayer(player, plugin.getConfigManager().getLeaveReason("chair-dismount"));
         }
     }
@@ -142,6 +191,10 @@ public class TableInteractListener implements Listener {
     @EventHandler(priority = EventPriority.HIGH)
     public void onInventoryClick(org.bukkit.event.inventory.InventoryClickEvent event) {
         if (event.getInventory().getHolder() instanceof com.vortex.blackjack.gui.LeaveConfirmGUI gui) {
+            gui.handleClick(event);
+        } else if (event.getInventory().getHolder() instanceof com.vortex.blackjack.gui.BettingGUI gui) {
+            gui.handleClick(event);
+        } else if (event.getInventory().getHolder() instanceof com.vortex.blackjack.gui.TableSettingsGUI gui) {
             gui.handleClick(event);
         }
     }
@@ -155,7 +208,9 @@ public class TableInteractListener implements Listener {
 
     @EventHandler(priority = EventPriority.HIGH)
     public void onInventoryDrag(org.bukkit.event.inventory.InventoryDragEvent event) {
-        if (event.getInventory().getHolder() instanceof com.vortex.blackjack.gui.LeaveConfirmGUI) {
+        if (event.getInventory().getHolder() instanceof com.vortex.blackjack.gui.LeaveConfirmGUI
+                || event.getInventory().getHolder() instanceof com.vortex.blackjack.gui.BettingGUI
+                || event.getInventory().getHolder() instanceof com.vortex.blackjack.gui.TableSettingsGUI) {
             event.setCancelled(true);
         }
     }
@@ -178,6 +233,16 @@ public class TableInteractListener implements Listener {
     public void onEntityDamageByEntity(EntityDamageByEntityEvent event) {
         if (event.getEntity().getScoreboardTags().contains("blackjack-entity")) {
             event.setCancelled(true);
+            if (event.getDamager() instanceof Player player) {
+                BlackjackTable seatedTable = tableManager.getPlayerTable(player);
+                if (seatedTable != null && seatedTable.isGameInProgress() && seatedTable.isPlayerTurn(player)) {
+                    if (player.isSneaking()) {
+                        seatedTable.doubleDown(player);
+                    } else {
+                        seatedTable.hit(player);
+                    }
+                }
+            }
         }
     }
 

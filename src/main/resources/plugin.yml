@@ -3,27 +3,20 @@ version: 2.4
 main: com.vortex.blackjack.BlackjackPlugin
 description: Minecraft için fiziksel 3D masalı Blackjack (21) eklentisi
 api-version: 1.21
-depend: [Vault]
-softdepend: [GSit, PlaceholderAPI]
+depend: [packetevents, Vault]
+softdepend: [PlaceholderAPI]
 loadbefore: []
-load: POSTWORLD
+load: STARTUP
 
 commands:
   blackjack:
-    description: Blackjack eklentisi ana komutu
+    description: Blackjack eklentisi yönetici komutu
     usage: |
-      &8[&6Blackjack&8] &rKullanılabilir Komutlar:
+      &8[&6Blackjack&8] &rYönetici Komutları:
       &e/bj createtable [min-bet:<n>] [max-bet:<n>] [max-players:<n>] [max-join-distance:<n>] &7- Blackjack masası oluşturur
       &e/bj settable <ayar> <değer> &7- En yakın masanın ayarlarını değiştirir
       &e/bj removetable &7- En yakın masayı kaldırır
-      &e/bj join &7- En yakın masaya katılır
-      &e/bj leave &7- Mevcut masadan ayrılır
-      &e/bj start &7- Yeni bir oyun başlatır
-      &e/bj hit &7- Bir kart daha çeker
-      &e/bj stand &7- Sıranızı bitirir (pas)
-      &e/bj doubledown &7- Bahsinizi ikiye katlayıp tek kart çeker
-      &e/bj bet <miktar> &7- Bahis koyar veya bahsi değiştirir
-      &e/bj stats [oyuncu] &7- İstatistikleri görüntüler
+      &e/bj reload &7- Yapılandırmayı yeniden yükler
       &e/bj version &7- Eklenti sürümünü ve durumunu kontrol eder
     aliases: [bj]
 

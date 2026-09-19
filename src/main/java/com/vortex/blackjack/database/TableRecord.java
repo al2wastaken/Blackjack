@@ -21,9 +21,18 @@ public class TableRecord {
     private Integer maxBet;
     private Integer maxPlayers;
     private Double maxJoinDistance;
+    private String croupierSkin;
+    private Integer countdownSeconds;
+    private String feltColor;
 
     public TableRecord(String id, String world, double x, double y, double z, float yaw, float pitch,
                        Integer minBet, Integer maxBet, Integer maxPlayers, Double maxJoinDistance) {
+        this(id, world, x, y, z, yaw, pitch, minBet, maxBet, maxPlayers, maxJoinDistance, "classic", 15, "GREEN_WOOL");
+    }
+
+    public TableRecord(String id, String world, double x, double y, double z, float yaw, float pitch,
+                       Integer minBet, Integer maxBet, Integer maxPlayers, Double maxJoinDistance,
+                       String croupierSkin, Integer countdownSeconds, String feltColor) {
         this.id = id;
         this.world = world;
         this.x = x;
@@ -35,6 +44,9 @@ public class TableRecord {
         this.maxBet = maxBet;
         this.maxPlayers = maxPlayers;
         this.maxJoinDistance = maxJoinDistance;
+        this.croupierSkin = croupierSkin;
+        this.countdownSeconds = countdownSeconds;
+        this.feltColor = feltColor;
     }
 
     public static TableRecord fromLocationAndSettings(Location loc, TableSettings settings) {
@@ -55,7 +67,10 @@ public class TableRecord {
                 settings.getRawMinBet(),
                 settings.getRawMaxBet(),
                 settings.getRawMaxPlayers(),
-                settings.getRawMaxJoinDistance()
+                settings.getRawMaxJoinDistance(),
+                settings.getCroupierSkin(),
+                settings.getCountdownSeconds(),
+                settings.getFeltMaterial().name()
         );
     }
 
@@ -71,6 +86,13 @@ public class TableRecord {
         s.setMaxBet(maxBet);
         s.setMaxPlayers(maxPlayers);
         s.setMaxJoinDistance(maxJoinDistance);
+        s.setCroupierSkin(croupierSkin);
+        s.setCountdownSeconds(countdownSeconds);
+        if (feltColor != null) {
+            try {
+                s.setFeltMaterial(org.bukkit.Material.valueOf(feltColor));
+            } catch (Exception ignored) {}
+        }
         return s;
     }
 
@@ -132,5 +154,29 @@ public class TableRecord {
 
     public void setMaxJoinDistance(Double maxJoinDistance) {
         this.maxJoinDistance = maxJoinDistance;
+    }
+
+    public String getCroupierSkin() {
+        return croupierSkin;
+    }
+
+    public void setCroupierSkin(String croupierSkin) {
+        this.croupierSkin = croupierSkin;
+    }
+
+    public Integer getCountdownSeconds() {
+        return countdownSeconds;
+    }
+
+    public void setCountdownSeconds(Integer countdownSeconds) {
+        this.countdownSeconds = countdownSeconds;
+    }
+
+    public String getFeltColor() {
+        return feltColor;
+    }
+
+    public void setFeltColor(String feltColor) {
+        this.feltColor = feltColor;
     }
 }

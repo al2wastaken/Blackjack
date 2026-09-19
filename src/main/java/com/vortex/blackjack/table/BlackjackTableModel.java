@@ -1,19 +1,13 @@
 package com.vortex.blackjack.table;
 
 import com.vortex.blackjack.BlackjackPlugin;
-import com.vortex.blackjack.config.ConfigManager;
-import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.World;
-import org.bukkit.entity.ArmorStand;
 import org.bukkit.entity.BlockDisplay;
 import org.bukkit.entity.Display;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Interaction;
-import org.bukkit.entity.TextDisplay;
-import org.bukkit.inventory.EntityEquipment;
-import org.bukkit.inventory.ItemStack;
 import org.bukkit.util.Transformation;
 import org.joml.AxisAngle4f;
 import org.joml.Vector3f;
@@ -22,8 +16,14 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Manages the 3D visual table model, table surface, and dynamic floating hologram.
- * Eliminates legacy world block destruction by rendering an entity-based casino table.
+ * 5x3 Chamfered/Trapezoid 3D Casino Table Model using BlockDisplay components.
+ * Matches the user's casino blueprint:
+ * - 5 blocks wide, 3 blocks deep.
+ * - Flat 5-block dealer side (Z = -1.5).
+ * - 45-degree chamfered corners on front-left and front-right edges.
+ * - Sturdy pedestals and polished wooden railing.
+ * - Interaction hitbox spanning the table surface.
+ * - Legacy center hologram eliminated in favor of Croupier & private player displays.
  */
 public class BlackjackTableModel {
 
@@ -32,7 +32,7 @@ public class BlackjackTableModel {
     private final Location centerLocation;
 
     private final List<Entity> modelEntities = new ArrayList<>();
-    private TextDisplay hologramDisplay;
+    private final List<BlockDisplay> feltDisplays = new ArrayList<>();
     private Interaction tableInteraction;
 
     public BlackjackTableModel(BlackjackPlugin plugin, BlackjackTable table, Location centerLocation) {
@@ -42,8 +42,7 @@ public class BlackjackTableModel {
     }
 
     /**
-     * Spawns the 3D table structure using BlockDisplay and ArmorStand components,
-     * along with an interaction hitbox and floating status hologram.
+     * Spawns the 5x3 chamfered table structure.
      */
     public void spawn(Material woodPlanks, Material woodSlab, Material feltMaterial) {
         destroy();
@@ -53,15 +52,16 @@ public class BlackjackTableModel {
 
         String tableTag = "blackjack-table:" + table.getTableId();
 
-        // 1. Central Table Felt (Green/Red Casino Surface)
-        // Table top dimensions: 2.2m x 2.2m x 0.15m height at y + 0.75
+        // ---------------------------------------------------------------------
+        // 1. Central Body Felt (3.0m wide, 2.7m deep, 0.15m thick) at Y + 0.75
+        // ---------------------------------------------------------------------
         Location feltLoc = centerLocation.clone().add(0, 0.75, 0);
-        BlockDisplay feltDisplay = world.spawn(feltLoc, BlockDisplay.class, display -> {
+        BlockDisplay mainFelt = world.spawn(feltLoc, BlockDisplay.class, display -> {
             display.setBlock(feltMaterial.createBlockData());
             Transformation t = new Transformation(
-                    new Vector3f(-1.1f, 0.0f, -1.1f),
+                    new Vector3f(-1.5f, 0.0f, -1.35f),
                     new AxisAngle4f(),
-                    new Vector3f(2.2f, 0.15f, 2.2f),
+                    new Vector3f(3.0f, 0.15f, 2.7f),
                     new AxisAngle4f()
             );
             display.setTransformation(t);
@@ -71,16 +71,105 @@ public class BlackjackTableModel {
             display.addScoreboardTag("blackjack-table-model");
             display.addScoreboardTag(tableTag);
         });
-        modelEntities.add(feltDisplay);
+        modelEntities.add(mainFelt);
+        feltDisplays.add(mainFelt);
 
-        // 2. Outer Wooden Rim / Railing (Slightly larger than felt for casino table look)
+        // ---------------------------------------------------------------------
+        // 2. Left Wing Felt (0.95m wide, 1.8m deep)
+        // ---------------------------------------------------------------------
+        BlockDisplay leftWing = world.spawn(feltLoc, BlockDisplay.class, display -> {
+            display.setBlock(feltMaterial.createBlockData());
+            Transformation t = new Transformation(
+                    new Vector3f(-2.45f, 0.0f, -1.35f),
+                    new AxisAngle4f(),
+                    new Vector3f(0.95f, 0.15f, 1.8f),
+                    new AxisAngle4f()
+            );
+            display.setTransformation(t);
+            display.setBillboard(Display.Billboard.FIXED);
+            display.setPersistent(false);
+            display.addScoreboardTag("blackjack-entity");
+            display.addScoreboardTag("blackjack-table-model");
+            display.addScoreboardTag(tableTag);
+        });
+        modelEntities.add(leftWing);
+        feltDisplays.add(leftWing);
+
+        // ---------------------------------------------------------------------
+        // 3. Right Wing Felt (0.95m wide, 1.8m deep)
+        // ---------------------------------------------------------------------
+        BlockDisplay rightWing = world.spawn(feltLoc, BlockDisplay.class, display -> {
+            display.setBlock(feltMaterial.createBlockData());
+            Transformation t = new Transformation(
+                    new Vector3f(1.5f, 0.0f, -1.35f),
+                    new AxisAngle4f(),
+                    new Vector3f(0.95f, 0.15f, 1.8f),
+                    new AxisAngle4f()
+            );
+            display.setTransformation(t);
+            display.setBillboard(Display.Billboard.FIXED);
+            display.setPersistent(false);
+            display.addScoreboardTag("blackjack-entity");
+            display.addScoreboardTag("blackjack-table-model");
+            display.addScoreboardTag(tableTag);
+        });
+        modelEntities.add(rightWing);
+        feltDisplays.add(rightWing);
+
+        // ---------------------------------------------------------------------
+        // 4. Chamfered Front-Left Corner (Angled 45 degrees)
+        // ---------------------------------------------------------------------
+        Location leftChamferLoc = centerLocation.clone().add(-1.75, 0.75, 0.75);
+        BlockDisplay leftChamfer = world.spawn(leftChamferLoc, BlockDisplay.class, display -> {
+            display.setBlock(feltMaterial.createBlockData());
+            Transformation t = new Transformation(
+                    new Vector3f(-0.55f, 0.0f, -0.55f),
+                    new AxisAngle4f((float) Math.toRadians(45.0), 0.0f, 1.0f, 0.0f),
+                    new Vector3f(1.1f, 0.15f, 1.1f),
+                    new AxisAngle4f()
+            );
+            display.setTransformation(t);
+            display.setBillboard(Display.Billboard.FIXED);
+            display.setPersistent(false);
+            display.addScoreboardTag("blackjack-entity");
+            display.addScoreboardTag("blackjack-table-model");
+            display.addScoreboardTag(tableTag);
+        });
+        modelEntities.add(leftChamfer);
+        feltDisplays.add(leftChamfer);
+
+        // ---------------------------------------------------------------------
+        // 5. Chamfered Front-Right Corner (Angled -45 degrees)
+        // ---------------------------------------------------------------------
+        Location rightChamferLoc = centerLocation.clone().add(1.75, 0.75, 0.75);
+        BlockDisplay rightChamfer = world.spawn(rightChamferLoc, BlockDisplay.class, display -> {
+            display.setBlock(feltMaterial.createBlockData());
+            Transformation t = new Transformation(
+                    new Vector3f(-0.55f, 0.0f, -0.55f),
+                    new AxisAngle4f((float) Math.toRadians(-45.0), 0.0f, 1.0f, 0.0f),
+                    new Vector3f(1.1f, 0.15f, 1.1f),
+                    new AxisAngle4f()
+            );
+            display.setTransformation(t);
+            display.setBillboard(Display.Billboard.FIXED);
+            display.setPersistent(false);
+            display.addScoreboardTag("blackjack-entity");
+            display.addScoreboardTag("blackjack-table-model");
+            display.addScoreboardTag(tableTag);
+        });
+        modelEntities.add(rightChamfer);
+        feltDisplays.add(rightChamfer);
+
+        // ---------------------------------------------------------------------
+        // 6. Polished Wooden Railing / Base Border (Slightly lower at Y + 0.65)
+        // ---------------------------------------------------------------------
         Location rimLoc = centerLocation.clone().add(0, 0.65, 0);
         BlockDisplay rimDisplay = world.spawn(rimLoc, BlockDisplay.class, display -> {
             display.setBlock(woodPlanks.createBlockData());
             Transformation t = new Transformation(
-                    new Vector3f(-1.25f, 0.0f, -1.25f),
+                    new Vector3f(-2.55f, 0.0f, -1.45f),
                     new AxisAngle4f(),
-                    new Vector3f(2.5f, 0.15f, 2.5f),
+                    new Vector3f(5.1f, 0.15f, 2.9f),
                     new AxisAngle4f()
             );
             display.setTransformation(t);
@@ -92,14 +181,16 @@ public class BlackjackTableModel {
         });
         modelEntities.add(rimDisplay);
 
-        // 3. Central Pedestal / Base Pillar
-        Location baseLoc = centerLocation.clone().add(0, 0.0, 0);
-        BlockDisplay baseDisplay = world.spawn(baseLoc, BlockDisplay.class, display -> {
+        // ---------------------------------------------------------------------
+        // 7. Sturdy Casino Pedestals (2 Legs)
+        // ---------------------------------------------------------------------
+        Location leg1Loc = centerLocation.clone().add(-1.4, 0.0, -0.1);
+        BlockDisplay leg1 = world.spawn(leg1Loc, BlockDisplay.class, display -> {
             display.setBlock(woodPlanks.createBlockData());
             Transformation t = new Transformation(
-                    new Vector3f(-0.4f, 0.0f, -0.4f),
+                    new Vector3f(-0.35f, 0.0f, -0.35f),
                     new AxisAngle4f(),
-                    new Vector3f(0.8f, 0.65f, 0.8f),
+                    new Vector3f(0.7f, 0.65f, 0.7f),
                     new AxisAngle4f()
             );
             display.setTransformation(t);
@@ -109,12 +200,32 @@ public class BlackjackTableModel {
             display.addScoreboardTag("blackjack-table-model");
             display.addScoreboardTag(tableTag);
         });
-        modelEntities.add(baseDisplay);
+        modelEntities.add(leg1);
 
-        // 4. Clickable Table Interaction Hitbox (lets player click table to join)
+        Location leg2Loc = centerLocation.clone().add(1.4, 0.0, -0.1);
+        BlockDisplay leg2 = world.spawn(leg2Loc, BlockDisplay.class, display -> {
+            display.setBlock(woodPlanks.createBlockData());
+            Transformation t = new Transformation(
+                    new Vector3f(-0.35f, 0.0f, -0.35f),
+                    new AxisAngle4f(),
+                    new Vector3f(0.7f, 0.65f, 0.7f),
+                    new AxisAngle4f()
+            );
+            display.setTransformation(t);
+            display.setBillboard(Display.Billboard.FIXED);
+            display.setPersistent(false);
+            display.addScoreboardTag("blackjack-entity");
+            display.addScoreboardTag("blackjack-table-model");
+            display.addScoreboardTag(tableTag);
+        });
+        modelEntities.add(leg2);
+
+        // ---------------------------------------------------------------------
+        // 8. Broad Interaction Hitbox (covers the 5x3 table surface)
+        // ---------------------------------------------------------------------
         Location interLoc = centerLocation.clone().add(0, 0.4, 0);
         tableInteraction = world.spawn(interLoc, Interaction.class, inter -> {
-            inter.setInteractionWidth(2.4f);
+            inter.setInteractionWidth(4.8f);
             inter.setInteractionHeight(0.9f);
             inter.setPersistent(false);
             inter.addScoreboardTag("blackjack-entity");
@@ -122,55 +233,28 @@ public class BlackjackTableModel {
             inter.addScoreboardTag(tableTag);
         });
         modelEntities.add(tableInteraction);
+    }
 
-        // 5. Floating Informational Hologram above the table
-        if (plugin.getConfigManager().isTableHologramEnabled()) {
-            Location holoLoc = centerLocation.clone().add(0, 1.85, 0);
-            hologramDisplay = world.spawn(holoLoc, TextDisplay.class, text -> {
-                text.setBillboard(Display.Billboard.CENTER);
-                text.setAlignment(TextDisplay.TextAlignment.CENTER);
-                text.setPersistent(false);
-                text.setSeeThrough(false);
-                text.setDefaultBackground(true);
-                text.addScoreboardTag("blackjack-entity");
-                text.addScoreboardTag("blackjack-hologram");
-                text.addScoreboardTag(tableTag);
-            });
-            modelEntities.add(hologramDisplay);
-
-            updateHologram();
+    /**
+     * Updates the felt material in real time without destroying the entire table.
+     */
+    public void updateFelt(Material newFelt) {
+        for (BlockDisplay display : feltDisplays) {
+            if (display != null && display.isValid()) {
+                display.setBlock(newFelt.createBlockData());
+            }
         }
     }
 
     /**
-     * Dynamically updates the floating hologram text with current table stats.
+     * Center hologram is replaced with Croupier NPC score display and private player displays.
      */
     public void updateHologram() {
-        if (hologramDisplay == null || !hologramDisplay.isValid()) return;
-
-        int current = table.getPlayerCount();
-        int max = table.getSettings().getMaxPlayers(plugin.getConfigManager());
-        int minBet = table.getSettings().getMinBet(plugin.getConfigManager());
-        int maxBet = table.getSettings().getMaxBet(plugin.getConfigManager());
-        boolean inProgress = table.isGameInProgress();
-
-        ConfigManager cfg = plugin.getConfigManager();
-        String title = cfg.getTableHologramTitle();
-        String status = inProgress ? cfg.getHologramStatusInProgress() : cfg.getHologramStatusReady();
-
-        String text = title + "\n"
-                + cfg.getHologramMinBet(minBet)
-                + ChatColor.DARK_GRAY + " | "
-                + cfg.getHologramMaxBet(maxBet) + "\n"
-                + cfg.getHologramPlayers(current, max) + "\n"
-                + cfg.getHologramHint() + "\n"
-                + status;
-
-        hologramDisplay.setText(text);
+        // No-op
     }
 
     /**
-     * Cleans up and deletes all model entities and the hologram.
+     * Cleans up and removes all model entities.
      */
     public void destroy() {
         for (Entity entity : modelEntities) {
@@ -179,7 +263,7 @@ public class BlackjackTableModel {
             }
         }
         modelEntities.clear();
-        hologramDisplay = null;
+        feltDisplays.clear();
         tableInteraction = null;
     }
 

@@ -11,6 +11,9 @@ public class TableSettings {
     private Integer maxBet;
     private Integer maxPlayers;
     private Double  maxJoinDistance;
+    private String  croupierSkin;
+    private Integer countdownSeconds;
+    private org.bukkit.Material feltMaterial;
 
     /** All-nulls constructor — every field resolves to the global config default. */
     public TableSettings() {}
@@ -22,6 +25,19 @@ public class TableSettings {
         this.maxBet          = maxBet;
         this.maxPlayers      = maxPlayers;
         this.maxJoinDistance = maxJoinDistance;
+    }
+
+    public TableSettings(Integer minBet, Integer maxBet,
+                         Integer maxPlayers, Double maxJoinDistance,
+                         String croupierSkin, Integer countdownSeconds,
+                         org.bukkit.Material feltMaterial) {
+        this.minBet          = minBet;
+        this.maxBet          = maxBet;
+        this.maxPlayers      = maxPlayers;
+        this.maxJoinDistance = maxJoinDistance;
+        this.croupierSkin    = croupierSkin;
+        this.countdownSeconds = countdownSeconds;
+        this.feltMaterial    = feltMaterial;
     }
 
     // -------------------------------------------------------------------------
@@ -44,6 +60,18 @@ public class TableSettings {
         return maxJoinDistance != null ? maxJoinDistance : cfg.getMaxJoinDistance();
     }
 
+    public String getCroupierSkin() {
+        return croupierSkin != null ? croupierSkin : "classic";
+    }
+
+    public int getCountdownSeconds() {
+        return countdownSeconds != null && countdownSeconds > 0 ? countdownSeconds : 15;
+    }
+
+    public org.bukkit.Material getFeltMaterial() {
+        return feltMaterial != null ? feltMaterial : org.bukkit.Material.GREEN_WOOL;
+    }
+
     // -------------------------------------------------------------------------
     // Raw nullable getters (for serialisation — null means "not set")
     // -------------------------------------------------------------------------
@@ -52,6 +80,9 @@ public class TableSettings {
     public Integer getRawMaxBet()          { return maxBet; }
     public Integer getRawMaxPlayers()      { return maxPlayers; }
     public Double  getRawMaxJoinDistance() { return maxJoinDistance; }
+    public String  getRawCroupierSkin()    { return croupierSkin; }
+    public Integer getRawCountdownSeconds(){ return countdownSeconds; }
+    public org.bukkit.Material getRawFeltMaterial() { return feltMaterial; }
 
     // -------------------------------------------------------------------------
     // Setters (used by /bj settable)
@@ -61,6 +92,9 @@ public class TableSettings {
     public void setMaxBet(Integer v)         { this.maxBet          = v; }
     public void setMaxPlayers(Integer v)     { this.maxPlayers      = v; }
     public void setMaxJoinDistance(Double v) { this.maxJoinDistance = v; }
+    public void setCroupierSkin(String v)    { this.croupierSkin    = v; }
+    public void setCountdownSeconds(Integer v){ this.countdownSeconds = v; }
+    public void setFeltMaterial(org.bukkit.Material v) { this.feltMaterial = v; }
 
     // -------------------------------------------------------------------------
     // Validation

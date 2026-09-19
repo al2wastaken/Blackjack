@@ -1,8 +1,12 @@
 package com.vortex.blackjack.table;
 
 import com.vortex.blackjack.BlackjackPlugin;
+import com.vortex.blackjack.chair.BlackjackChair;
 import com.vortex.blackjack.config.ConfigManager;
+import com.vortex.blackjack.croupier.CroupierNPC;
+import com.vortex.blackjack.croupier.CroupierSkin;
 import com.vortex.blackjack.game.BlackjackEngine;
+import com.vortex.blackjack.gui.BettingGUI;
 import com.vortex.blackjack.model.Card;
 import com.vortex.blackjack.model.Deck;
 import com.vortex.blackjack.util.ChatUtils;
@@ -11,19 +15,24 @@ import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
+import org.bukkit.Sound;
 import org.bukkit.World;
-import org.bukkit.entity.ItemDisplay;
+import org.bukkit.entity.Display;
 import org.bukkit.entity.Entity;
+import org.bukkit.entity.ItemDisplay;
 import org.bukkit.entity.Player;
+import org.bukkit.entity.TextDisplay;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scheduler.BukkitTask;
 import org.bukkit.util.Transformation;
 import org.joml.AxisAngle4f;
 import org.joml.Vector3f;
-import com.vortex.blackjack.chair.BlackjackChair;
+
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -33,7 +42,8 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Represents a single blackjack table with game logic
+ * Represents a single blackjack table with game logic, 5x3 physical table model,
+ * PacketEvents Player-NPC Croupier, private hand TextDisplays, and 5-chair layout.
  */
 public class BlackjackTable {
     private final BlackjackPlugin plugin;
@@ -48,7 +58,14 @@ public class BlackjackTable {
     // 3D Visual Model & Chairs (Roulette architecture)
     private final BlackjackTableModel tableModel;
     private final List<BlackjackChair> chairs = new ArrayList<>();
-    
+
+    // PacketEvents Croupier Player NPC
+    private CroupierNPC croupierNPC;
+
+    // Countdown task & remaining seconds
+    private BukkitTask countdownTask;
+    private int countdownRemaining = 0;
+
     // Game state
     private final List<Player> players = new ArrayList<>();
     private final Map<Player, List<Card>> playerHands = new ConcurrentHashMap<>();
@@ -61,16 +78,17 @@ public class BlackjackTable {
     private List<Card> dealerHand = new ArrayList<>();
     private Deck deck = new Deck();
     private final Map<Player, Integer> roundBets = new ConcurrentHashMap<>();
-    
+
     // Display entities
     private final Map<Player, List<ItemDisplay>> playerCardDisplays = new ConcurrentHashMap<>();
-    private final Map<Player, List<ItemDisplay>> playerDealerDisplays = new ConcurrentHashMap<>();
+    private final List<ItemDisplay> dealerCardDisplays = new ArrayList<>();
+    private final Map<Player, TextDisplay> playerPrivateDisplays = new ConcurrentHashMap<>();
     private final Map<UUID, Long> lastMessageTime = new HashMap<>();
-    
+
     // Auto-leave tracking
     private final Map<Player, Long> gameEndTimes = new ConcurrentHashMap<>();
     private BukkitTask autoLeaveTask;
-    
+
     public BlackjackTable(BlackjackPlugin plugin, TableManager tableManager,
                           ConfigManager configManager, Location centerLoc,
                           TableSettings settings) {
@@ -84,12 +102,21 @@ public class BlackjackTable {
         this.tableId = this.centerLoc.getWorld().getName() + "_" + this.centerLoc.getBlockX() + "_" + this.centerLoc.getBlockY() + "_" + this.centerLoc.getBlockZ();
         purgeTrackedDisplays();
 
-        // Initialize 3D table model (BlockDisplay/Interaction) and floating status hologram
+        // 1. Initialize 5x3 chamfered table model (BlockDisplay/Interaction)
+        Material felt = settings.getFeltMaterial();
         this.tableModel = new BlackjackTableModel(plugin, this, this.centerLoc);
-        this.tableModel.spawn(configManager.getWoodPlanks(), configManager.getWoodSlab(), configManager.getFeltMaterial());
+        this.tableModel.spawn(configManager.getWoodPlanks(), configManager.getWoodSlab(), felt != null ? felt : configManager.getFeltMaterial());
 
-        // Initialize 3D Roulette-style chairs
+        // 2. Initialize 5 physical chairs matching the user's casino blueprint
         initChairs();
+
+        // 3. Initialize PacketEvents Croupier NPC at (x=0, z=-1.8, yaw=0)
+        Location croupierLoc = centerLoc.clone().add(0, 0, -1.8);
+        croupierLoc.setYaw(0.0f);
+        croupierLoc.setPitch(0.0f);
+        String skinTexture = CroupierSkin.getPresetOrDefault(settings.getCroupierSkin());
+        this.croupierNPC = new CroupierNPC(plugin, this, croupierLoc, skinTexture);
+        this.croupierNPC.updateAllNearby();
     }
 
     public TableSettings getSettings() {
@@ -109,8 +136,7 @@ public class BlackjackTable {
     }
 
     /**
-     * Initializes or re-initializes chairs around the table.
-     * Chairs spawn 0.5 blocks lower than table level and face directly towards table center.
+     * Initializes the 5 physical chairs matching the 5x3 chamfered casino blueprint.
      */
     public void initChairs() {
         for (BlackjackChair chair : chairs) {
@@ -118,42 +144,95 @@ public class BlackjackTable {
         }
         chairs.clear();
 
-        int maxPlayers = settings.getMaxPlayers(configManager);
-        double radius = 1.8;
-        double chairY = centerLoc.getY();
+        double tableX = centerLoc.getX();
+        double tableY = centerLoc.getY();
+        double tableZ = centerLoc.getZ();
 
-        for (int i = 0; i < maxPlayers; i++) {
-            Location chairLoc;
+        // 5 Chairs matching the 5x3 chamfered casino layout:
+        // Seat 0: Left Angled corner (x=-2.3, z=1.4, yaw=135°)
+        chairs.add(new BlackjackChair(plugin, this, 0, new Location(centerLoc.getWorld(), tableX - 2.3, tableY, tableZ + 1.4), 135.0f));
+        // Seat 1: Front Left (x=-1.2, z=2.0, yaw=180°)
+        chairs.add(new BlackjackChair(plugin, this, 1, new Location(centerLoc.getWorld(), tableX - 1.2, tableY, tableZ + 2.0), 180.0f));
+        // Seat 2: Front Center (x=0.0, z=2.0, yaw=180°)
+        chairs.add(new BlackjackChair(plugin, this, 2, new Location(centerLoc.getWorld(), tableX + 0.0, tableY, tableZ + 2.0), 180.0f));
+        // Seat 3: Front Right (x=1.2, z=2.0, yaw=180°)
+        chairs.add(new BlackjackChair(plugin, this, 3, new Location(centerLoc.getWorld(), tableX + 1.2, tableY, tableZ + 2.0), 180.0f));
+        // Seat 4: Right Angled corner (x=2.3, z=1.4, yaw=225°)
+        chairs.add(new BlackjackChair(plugin, this, 4, new Location(centerLoc.getWorld(), tableX + 2.3, tableY, tableZ + 1.4), 225.0f));
 
-            if (maxPlayers == 4) {
-                // Classic 4 cardinal chairs
-                switch (i) {
-                    case 0 -> chairLoc = new Location(centerLoc.getWorld(), centerLoc.getX() + radius, chairY, centerLoc.getZ());
-                    case 1 -> chairLoc = new Location(centerLoc.getWorld(), centerLoc.getX(), chairY, centerLoc.getZ() + radius);
-                    case 2 -> chairLoc = new Location(centerLoc.getWorld(), centerLoc.getX() - radius, chairY, centerLoc.getZ());
-                    default -> chairLoc = new Location(centerLoc.getWorld(), centerLoc.getX(), chairY, centerLoc.getZ() - radius);
-                }
-            } else {
-                // Circular layout for any N player count
-                double angle = (2 * Math.PI * i) / maxPlayers - (Math.PI / 2);
-                double x = centerLoc.getX() + radius * Math.cos(angle);
-                double z = centerLoc.getZ() + radius * Math.sin(angle);
-                chairLoc = new Location(centerLoc.getWorld(), x, chairY, z);
+        for (BlackjackChair chair : chairs) {
+            chair.spawn(configManager.getWoodPlanks(), configManager.getWoodSlab(), configManager.getChairCushionMaterial());
+        }
+    }
+
+    /**
+     * Starts the 15-second in-seat countdown when players sit down.
+     */
+    public void startCountdown() {
+        if (countdownTask != null || gameInProgress || settlingResults) return;
+
+        countdownRemaining = settings.getCountdownSeconds();
+        countdownTask = Bukkit.getScheduler().runTaskTimer(plugin, () -> {
+            if (players.isEmpty()) {
+                cancelCountdown();
+                return;
             }
 
-            // Direction vector pointing directly from chair towards table center
-            org.bukkit.util.Vector dir = centerLoc.toVector().subtract(chairLoc.toVector());
-            dir.setY(0);
-            Location lookLoc = chairLoc.clone().setDirection(dir);
-            float yaw = lookLoc.getYaw();
+            // Send countdown actionbar and ticking sound to seated players
+            for (Player p : players) {
+                p.spigot().sendMessage(net.md_5.bungee.api.ChatMessageType.ACTION_BAR,
+                        new net.md_5.bungee.api.chat.TextComponent("§eOyun Başlıyor: §6" + countdownRemaining + "s §7| [Space] Bahis Değiştir"));
+                if (countdownRemaining <= 5 && countdownRemaining > 0) {
+                    p.playSound(p.getLocation(), Sound.BLOCK_NOTE_BLOCK_HAT, 1.0f, 1.0f);
+                }
+            }
 
-            BlackjackChair chair = new BlackjackChair(plugin, this, i, chairLoc, yaw);
-            chair.spawn(configManager.getWoodPlanks(), configManager.getWoodSlab(), configManager.getChairCushionMaterial());
-            chairs.add(chair);
+            if (countdownRemaining <= 0) {
+                cancelCountdown();
+                onCountdownComplete();
+                return;
+            }
+
+            countdownRemaining--;
+        }, 20L, 20L);
+    }
+
+    public void cancelCountdown() {
+        if (countdownTask != null) {
+            countdownTask.cancel();
+            countdownTask = null;
+        }
+        countdownRemaining = 0;
+    }
+
+    private void onCountdownComplete() {
+        int minBet = settings.getMinBet(configManager);
+        List<Player> toRemove = new ArrayList<>();
+
+        for (Player p : new ArrayList<>(players)) {
+            Integer bet = plugin.getPlayerBets().get(p);
+            if (bet == null || bet <= 0) {
+                // Player waited and hasn't placed a bet
+                double balance = plugin.getEconomyProvider().getBalance(p.getUniqueId()).doubleValue();
+                if (balance >= minBet) {
+                    plugin.getEconomyProvider().subtract(p.getUniqueId(), BigDecimal.valueOf(minBet));
+                    plugin.getPlayerBets().put(p, minBet);
+                    roundBets.put(p, minBet);
+                    p.sendMessage("§eGeri sayım bittiği için otomatik minimum bahis (§a" + minBet + "₺§e) yatırıldı.");
+                    p.playSound(p.getLocation(), Sound.BLOCK_NOTE_BLOCK_CHIME, 1.0f, 1.0f);
+                } else {
+                    toRemove.add(p);
+                }
+            }
         }
 
-        if (tableModel != null) {
-            tableModel.updateHologram();
+        for (Player p : toRemove) {
+            p.sendMessage("§cMinimum bahsi (" + minBet + "₺) karşılayacak bakiyeniz olmadığı için masadan kaldırıldınız!");
+            removePlayer(p, "Yetersiz Bakiye", false);
+        }
+
+        if (!players.isEmpty()) {
+            startGame();
         }
     }
     
@@ -185,7 +264,7 @@ public class BlackjackTable {
                 return false;
             }
             
-            if (players.size() >= settings.getMaxPlayers(configManager)) {
+            if (players.size() >= 5) {
                 player.sendMessage(configManager.getMessage("table-full"));
                 return false;
             }
@@ -229,23 +308,29 @@ public class BlackjackTable {
                 playerSeats.put(player, seatNumber);
                 playerHands.put(player, new ArrayList<>());
                 playerCardDisplays.put(player, new ArrayList<>());
-                playerDealerDisplays.put(player, new ArrayList<>());
                 tableManager.setPlayerTable(player, this);
                 
                 // Sit player in chair (Roulette style - native ArmorStand sitting, camera alignment, sound)
                 chair.sit(player);
 
-                if (tableModel != null) {
-                    tableModel.updateHologram();
+                if (croupierNPC != null) {
+                    croupierNPC.show(player);
                 }
                 
                 broadcastTableMessage(configManager.formatMessage("player-joined-table", "player", player.getName()));
-                
-                // Show betting options if UX features enabled
-                if (configManager.areParticlesEnabled()) { // Using as UX enabled check
-                    chatUtils.sendBettingOptions(player);
+
+                // Immediately open BettingGUI for the newly seated player
+                Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                    if (player.isOnline() && players.contains(player)) {
+                        new BettingGUI(plugin, this, player).open();
+                    }
+                }, 3L);
+
+                // Start countdown if first player or not running
+                if (!gameInProgress && countdownTask == null) {
+                    startCountdown();
                 }
-                
+
                 return true;
             } catch (Exception e) {
                 // Cleanup on error
@@ -253,7 +338,6 @@ public class BlackjackTable {
                 playerSeats.remove(player);
                 playerHands.remove(player);
                 playerCardDisplays.remove(player);
-                playerDealerDisplays.remove(player);
                 tableManager.setPlayerTable(player, null);
                 chair.eject(player);
                 
@@ -286,7 +370,6 @@ public class BlackjackTable {
             if (!players.contains(player)) return;
             
             Integer betAmount = plugin.getPlayerBets().get(player);
-            boolean shouldRefundBet = !forceForfeit && gameInProgress && configManager.shouldRefundOnLeave();
 
             // Safely eject player from chair
             Integer seatNumber = playerSeats.get(player);
@@ -302,58 +385,59 @@ public class BlackjackTable {
             doubleDownPlayers.remove(player);
             tableManager.setPlayerTable(player, null);
             
-            // Handle bet:
-            // 1. Force forfeit (e.g. player confirmed leaving via warning GUI)
-            if (forceForfeit && betAmount != null && betAmount > 0) {
+            // Handle bet refund vs forfeit:
+            // Case 1: Dismount before game starts -> 100% full refund!
+            if (!gameInProgress && betAmount != null && betAmount > 0) {
                 plugin.getPlayerBets().remove(player);
+                roundBets.remove(player);
+                plugin.getEconomyProvider().add(player.getUniqueId(), BigDecimal.valueOf(betAmount));
+                player.sendMessage("§aMasadan kalktınız. Bahsiniz (§e" + betAmount + "₺§a) eksiksiz iade edildi.");
+            }
+            // Case 2: Confirmed leave mid-game -> Bet forfeited
+            else if (forceForfeit && betAmount != null && betAmount > 0) {
+                plugin.getPlayerBets().remove(player);
+                roundBets.remove(player);
                 player.sendMessage(configManager.formatMessage("left-table-bet-forfeit", "amount", betAmount));
-            } else if (shouldRefundBet && betAmount != null && betAmount > 0) {
-                // 2. Mid-game leave with refund enabled in config
+            }
+            // Case 3: Mid-game leave with refund config setting
+            else if (gameInProgress && configManager.shouldRefundOnLeave() && betAmount != null && betAmount > 0) {
                 plugin.getPlayerBets().remove(player);
-                if (plugin.getEconomyProvider().add(player.getUniqueId(), BigDecimal.valueOf(betAmount))) {
-                    player.sendMessage(configManager.formatMessage("left-table-bet-refunded", "amount", betAmount));
-                } else {
-                    player.sendMessage(configManager.getMessage("error-refund"));
-                    plugin.getLogger().severe("Failed to refund bet for " + player.getName() + " when leaving mid-game");
-                }
-            } else if (gameInProgress && betAmount != null && betAmount > 0) {
-                // 3. Mid-game leave with refunds disabled in config
+                roundBets.remove(player);
+                plugin.getEconomyProvider().add(player.getUniqueId(), BigDecimal.valueOf(betAmount));
+                player.sendMessage(configManager.formatMessage("left-table-bet-refunded", "amount", betAmount));
+            }
+            // Case 4: Mid-game leave without refund
+            else if (gameInProgress && betAmount != null && betAmount > 0) {
                 plugin.getPlayerBets().remove(player);
+                roundBets.remove(player);
                 player.sendMessage(configManager.formatMessage("left-table-bet-forfeit", "amount", betAmount));
             } else {
                 if (betAmount != null && betAmount > 0) {
                     plugin.getPlayerBets().remove(player);
+                    roundBets.remove(player);
                 }
                 player.sendMessage(configManager.getMessage("left-table"));
             }
             
-            // Remove display entities
+            // Remove player's card displays
             List<ItemDisplay> cardDisplays = playerCardDisplays.remove(player);
             if (cardDisplays != null) {
-                cardDisplays.forEach(display -> {
-                    removeTrackedDisplay(display);
-                });
-            }
-            
-            List<ItemDisplay> dealerDisplays = playerDealerDisplays.remove(player);
-            if (dealerDisplays != null) {
-                dealerDisplays.forEach(display -> {
-                    removeTrackedDisplay(display);
-                });
+                cardDisplays.forEach(this::removeTrackedDisplay);
             }
 
-            if (tableModel != null) {
-                tableModel.updateHologram();
+            // Remove player's private text display
+            TextDisplay privDisplay = playerPrivateDisplays.remove(player);
+            if (privDisplay != null && !privDisplay.isDead()) {
+                privDisplay.remove();
             }
             
             // Handle game state
             if (players.isEmpty()) {
-                endGame();
-            } else if (gameInProgress && currentPlayer != null && currentPlayer.equals(player)) {
+                cancelCountdown();
+                resetGameState();
+                clearAllDisplays();
+            } else if (gameInProgress && player.equals(currentPlayer)) {
                 nextTurn();
-                broadcastTableMessage(configManager.formatMessage("player-left-during-turn", "player", player.getName(), "reason", reason));
-            } else {
-                broadcastTableMessage(configManager.formatMessage("player-left-table", "player", player.getName(), "reason", reason));
             }
         }
     }
@@ -431,9 +515,7 @@ public class BlackjackTable {
             
             // Start first player's turn
             currentPlayer = players.get(0);
-            if (tableModel != null) {
-                tableModel.updateHologram();
-            }
+            updateAllPlayerPrivateDisplays();
             broadcastTableMessage(configManager.formatMessage("game-started", "player", currentPlayer.getName()));
             
             // Send interactive turn message (doubledown available on first turn)
@@ -579,7 +661,6 @@ public class BlackjackTable {
             currentIndex = (currentIndex + 1) % players.size();
             currentPlayer = players.get(currentIndex);
             attempts++;
-            // Prevent infinite loop
             if (attempts >= players.size()) {
                 endGame();
                 return;
@@ -587,13 +668,12 @@ public class BlackjackTable {
         } while (finishedPlayers.contains(currentPlayer));
         
         if (currentPlayer != null && !finishedPlayers.contains(currentPlayer)) {
-            // More compact turn announcement
             broadcastTableMessage(configManager.formatMessage("player-turn", "player", currentPlayer.getName()));
             
-            // Show doubledown only if player has exactly 2 cards and hasn't doubled down yet
             List<Card> hand = playerHands.get(currentPlayer);
             boolean canDoubleDown = hand != null && hand.size() == 2 && !doubleDownPlayers.contains(currentPlayer);
             chatUtils.sendGameActionBar(currentPlayer, canDoubleDown);
+            updateAllPlayerPrivateDisplays();
         } else {
             endGame();
         }
@@ -601,51 +681,92 @@ public class BlackjackTable {
     
     private void endGame() {
         synchronized (this) {
-            if (!gameInProgress) return;
+            if (!gameInProgress || settlingResults) return;
             
-            // Dealer logic
-            boolean anyValidPlayers = players.stream()
-                .anyMatch(p -> !gameEngine.isBusted(playerHands.get(p)));
-            
-            if (anyValidPlayers) {
-                while (gameEngine.dealerShouldHit(dealerHand, configManager.shouldHitSoft17())) {
-                    dealerHand.add(deck.drawCard());
-                }
-            }
-            
-            // Set game as finished BEFORE showing final dealer cards
             gameInProgress = false;
             settlingResults = true;
             
-            // Update dealer displays and show final hand with cards and value
-            updateDealerDisplays();
-            int dealerValue = gameEngine.calculateHandValue(dealerHand);
-            String dealerHandDisplay = formatHand(dealerHand);
-            String dealerValueDisplay = formatHandValue(dealerValue);
-            broadcastTableMessage(configManager.formatDealerHandBroadcast(dealerHandDisplay, dealerValueDisplay));
+            // Remove turn hints from player displays
+            updateAllPlayerPrivateDisplays();
             
-            // Handle payouts for each player with a small delay to let dealer cards show
+            boolean anyValidPlayers = players.stream()
+                .anyMatch(p -> !gameEngine.isBusted(playerHands.get(p)));
+            
+            // STEP 1: Reveal dealer hole card with Croupier arm swing and sound after 10 ticks
             Bukkit.getScheduler().runTaskLater(plugin, () -> {
-                for (Player player : new ArrayList<>(players)) {
-                    if (player.isOnline()) {
-                        handlePayout(player, dealerValue);
-                    } else {
-                        removePlayer(player);
+                if (croupierNPC != null) {
+                    croupierNPC.swingArm();
+                }
+                playCardSound(centerLoc);
+                updateDealerDisplays();
+
+                int initialVal = gameEngine.calculateHandValue(dealerHand);
+                broadcastTableMessage("§6[Kasa] §eİlk el açıldı: §f" + formatHand(dealerHand) + " §7(Değer: §e" + initialVal + "§7)");
+
+                // STEP 2: Cinematic paced dealer draw loop (1.5s per card)
+                runDealerDrawStep(anyValidPlayers);
+            }, 10L);
+        }
+    }
+
+    private void runDealerDrawStep(boolean anyValidPlayers) {
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            if (anyValidPlayers && gameEngine.dealerShouldHit(dealerHand, configManager.shouldHitSoft17())) {
+                Card newCard = deck.drawCard();
+                dealerHand.add(newCard);
+
+                if (croupierNPC != null) {
+                    croupierNPC.swingArm();
+                }
+                playCardSound(centerLoc);
+                updateDealerDisplays();
+
+                int currentVal = gameEngine.calculateHandValue(dealerHand);
+                broadcastTableMessage("§6[Kasa] §eKart çekti: §f" + formatCard(newCard) + " §7(Toplam: §e" + currentVal + "§7)");
+
+                // Wait 1.5 seconds (30 ticks) before next card or finish check
+                runDealerDrawStep(anyValidPlayers);
+            } else {
+                // Dealer turn finished!
+                int dealerValue = gameEngine.calculateHandValue(dealerHand);
+                updateDealerDisplays();
+
+                broadcastTableMessage(configManager.formatDealerHandBroadcast(formatHand(dealerHand), formatHandValue(dealerValue)));
+
+                // Settle payouts after 1 second
+                Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                    finishRoundAndPayouts(dealerValue);
+                }, 20L);
+            }
+        }, 30L); // 30 ticks = 1.5s delay
+    }
+
+    private void finishRoundAndPayouts(int dealerValue) {
+        synchronized (this) {
+            for (Player player : new ArrayList<>(players)) {
+                if (player.isOnline()) {
+                    handlePayout(player, dealerValue);
+                } else {
+                    removePlayer(player);
+                }
+            }
+
+            resetGameState();
+            settlingResults = false;
+            roundBets.clear();
+
+            if (!players.isEmpty()) {
+                broadcastTableMessage(configManager.getMessage("game-ended"));
+                // Automatically prompt and start countdown for next round if players remain seated
+                Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                    if (!gameInProgress && !settlingResults && !players.isEmpty() && countdownTask == null) {
+                        for (Player p : players) {
+                            p.sendMessage("§eYeni el hazırlanıyor... Bahsinizi değiştirmek için §a[Space] §etuşuna basabilirsiniz.");
+                        }
+                        startCountdown();
                     }
-                }
-                
-                // Reset game state immediately after payouts so new games can start
-                resetGameState();
-                settlingResults = false;
-                roundBets.clear();
-                
-                // Show game ended message and buttons after payouts
-                if (!players.isEmpty()) {
-                    broadcastTableMessage(configManager.getMessage("game-ended"));
-                    sendGameEndButtons();
-                    startAutoLeaveTimer();
-                }
-            }, 20L); // 1 second delay
+                }, 60L);
+            }
         }
     }
     
@@ -656,9 +777,6 @@ public class BlackjackTable {
         playerHands.clear();
         dealerHand.clear();
         deck = new Deck();
-        if (tableModel != null) {
-            tableModel.updateHologram();
-        }
     }
     
     private void handlePayout(Player player, int dealerValue) {
@@ -815,71 +933,55 @@ public class BlackjackTable {
     }
     
     private Transformation createCardTransformation(boolean isDealer, int seatNumber) {
-        if (isDealer) {
-            float yRotation = switch (seatNumber) {
-                case 0 -> (float) (-Math.PI / 2);
-                case 1 -> (float) Math.PI;
-                case 2 -> (float) (Math.PI / 2);
-                case 3 -> 0.0f;
-                default -> 0.0f;
-            };
-            return new Transformation(
-                new Vector3f(0.0f, 0.0f, 0.0f),
-                new AxisAngle4f(yRotation, 0.0f, 1.0f, 0.0f),
-                new Vector3f(0.35f, 0.35f, 0.35f),
-                new AxisAngle4f((float)Math.toRadians(15.0), 1.0f, 0.0f, 0.0f)
-            );
-        } else {
-            float xRotation = (float) (Math.PI / 2);
-            float zRotation = 0.0f;
-            switch (seatNumber) {
-                case 0:
-                    zRotation = (float) (Math.PI / 2);
-                    break;
-                case 1:
-                    zRotation = (float) Math.PI;
-                    break;
-                case 2:
-                    zRotation = (float) (Math.PI / 2);
-                    break;
-                case 3:
-                    zRotation = (float) Math.PI;
-            }
+        float xRotation = (float) (Math.PI / 2); // Lay flat on the table
+        float zRotation;
 
-            return new Transformation(
-                new Vector3f(0.0f, 0.0f, 0.0f),
-                new AxisAngle4f(xRotation, 1.0f, 0.0f, 0.0f),
-                new Vector3f(0.35f, 0.35f, 0.35f),
-                new AxisAngle4f(zRotation, 0.0f, 0.0f, 1.0f)
-            );
+        if (isDealer) {
+            zRotation = 0.0f; // Facing players (+Z)
+        } else {
+            switch (seatNumber) {
+                case 0 -> zRotation = (float) Math.toRadians(45.0);
+                case 1, 2, 3 -> zRotation = (float) Math.PI;
+                case 4 -> zRotation = (float) Math.toRadians(-45.0);
+                default -> zRotation = (float) Math.PI;
+            }
         }
+
+        return new Transformation(
+            new Vector3f(0.0f, 0.0f, 0.0f),
+            new AxisAngle4f(xRotation, 1.0f, 0.0f, 0.0f),
+            new Vector3f(0.35f, 0.35f, 0.35f),
+            new AxisAngle4f(zRotation, 0.0f, 0.0f, 1.0f)
+        );
     }
     
     private ItemDisplay createCardDisplay(Location loc, Card card, boolean isDealer, int seatNumber) {
         World world = loc.getWorld();
-        Location displayLoc = new Location(world, loc.getBlockX() + 0.5, loc.getBlockY(), loc.getBlockZ() + 0.5, 0.0f, 0.0f);
-        ItemDisplay display = (ItemDisplay)world.spawn(displayLoc, ItemDisplay.class);
-        
-        if (card != null) {
-            String cardIdentifier = card.getCardIdentifier();
-            ItemStack cardItem = new ItemStack(Material.CLOCK);
-            ItemMeta meta = cardItem.getItemMeta();
-            meta.setItemModel(new NamespacedKey("playing_cards", "card/" + cardIdentifier.toLowerCase()));
-            cardItem.setItemMeta(meta);
-            display.setItemStack(cardItem);
-        } else {
-            ItemStack cardBack = new ItemStack(Material.CLOCK);
-            ItemMeta meta = cardBack.getItemMeta();
-            meta.setItemModel(new NamespacedKey("playing_cards", "card/back"));
-            cardBack.setItemMeta(meta);
-            display.setItemStack(cardBack);
-        }
+        Location displayLoc = loc.clone();
+        return world.spawn(displayLoc, ItemDisplay.class, display -> {
+            if (card != null) {
+                String cardIdentifier = card.getCardIdentifier();
+                ItemStack cardItem = new ItemStack(Material.CLOCK);
+                ItemMeta meta = cardItem.getItemMeta();
+                meta.setItemModel(new NamespacedKey("playing_cards", "card/" + cardIdentifier.toLowerCase()));
+                cardItem.setItemMeta(meta);
+                display.setItemStack(cardItem);
+            } else {
+                ItemStack cardBack = new ItemStack(Material.CLOCK);
+                ItemMeta meta = cardBack.getItemMeta();
+                meta.setItemModel(new NamespacedKey("playing_cards", "card/back"));
+                cardBack.setItemMeta(meta);
+                display.setItemStack(cardBack);
+            }
 
-        display.addScoreboardTag("blackjack-card");
-        display.addScoreboardTag(getTableDisplayTag());
-        Transformation transform = createCardTransformation(isDealer, seatNumber);
-        display.setTransformation(transform);
-        return display;
+            display.setBillboard(Display.Billboard.FIXED);
+            display.setPersistent(false);
+            display.addScoreboardTag("blackjack-card");
+            display.addScoreboardTag("blackjack-entity");
+            display.addScoreboardTag(getTableDisplayTag());
+            Transformation transform = createCardTransformation(isDealer, seatNumber);
+            display.setTransformation(transform);
+        });
     }
     
     private String getCardIdentifier(Card card) {
@@ -1034,160 +1136,203 @@ public class BlackjackTable {
         }
     }
     
-    // Display management methods - ORIGINAL IMPLEMENTATION
+    public Location getPlayerCardBaseLocation(int seatNumber) {
+        double tableX = centerLoc.getX();
+        double tableY = centerLoc.getY() + 0.82;
+        double tableZ = centerLoc.getZ();
+        return switch (seatNumber) {
+            case 0 -> new Location(centerLoc.getWorld(), tableX - 1.6, tableY, tableZ + 0.8);
+            case 1 -> new Location(centerLoc.getWorld(), tableX - 0.8, tableY, tableZ + 1.05);
+            case 2 -> new Location(centerLoc.getWorld(), tableX + 0.0, tableY, tableZ + 1.05);
+            case 3 -> new Location(centerLoc.getWorld(), tableX + 0.8, tableY, tableZ + 1.05);
+            case 4 -> new Location(centerLoc.getWorld(), tableX + 1.6, tableY, tableZ + 0.8);
+            default -> new Location(centerLoc.getWorld(), tableX, tableY, tableZ + 1.05);
+        };
+    }
+
     private void updateCardDisplays(Player player, List<Card> hand) {
-        int seatNumber = playerSeats.get(player);
-        Location baseDisplayLoc = getSeatLocation(seatNumber);
-        
-        if (playerCardDisplays.containsKey(player)) {
-            for (ItemDisplay display : playerCardDisplays.get(player)) {
+        Integer seatNumber = playerSeats.get(player);
+        if (seatNumber == null) return;
+
+        List<ItemDisplay> oldDisplays = playerCardDisplays.get(player);
+        if (oldDisplays != null) {
+            for (ItemDisplay display : oldDisplays) {
                 removeTrackedDisplay(display);
             }
-            playerCardDisplays.get(player).clear();
+            oldDisplays.clear();
         }
 
         playerCardDisplays.putIfAbsent(player, new ArrayList<>());
-        double cardSpacing = configManager.getCardSpacing();
-        double playerHeight = configManager.getPlayerCardHeight();
-        double distanceFromPlayer = 1.0; // Original hardcoded value
+        Location baseLoc = getPlayerCardBaseLocation(seatNumber);
+        double cardSpacing = 0.22;
+        double startOffset = -((hand.size() - 1) * cardSpacing) / 2.0;
 
         for (int i = 0; i < hand.size(); i++) {
             Card card = hand.get(i);
-            Location spawnLoc = baseDisplayLoc.clone();
-            ItemDisplay display = createCardDisplay(spawnLoc, card, false, seatNumber);
-            Vector3f translation = new Vector3f();
-            float xOffset = 0.0f;
-            float zOffset = 0.0f;
-            
-            switch (seatNumber) {
-                case 0:
-                    xOffset = (float)(-distanceFromPlayer);
-                    zOffset = (float)(i * cardSpacing - (hand.size() - 1) * cardSpacing / 2.0);
-                    break;
-                case 1:
-                    xOffset = (float)(i * cardSpacing - (hand.size() - 1) * cardSpacing / 2.0);
-                    zOffset = (float)(-distanceFromPlayer);
-                    break;
-                case 2:
-                    xOffset = (float)distanceFromPlayer;
-                    zOffset = (float)(-(i * cardSpacing) + (hand.size() - 1) * cardSpacing / 2.0);
-                    break;
-                case 3:
-                    xOffset = (float)(-(i * cardSpacing) + (hand.size() - 1) * cardSpacing / 2.0);
-                    zOffset = (float)distanceFromPlayer;
+            Location spawnLoc;
+            if (seatNumber == 0) {
+                double offset = startOffset + i * cardSpacing;
+                spawnLoc = baseLoc.clone().add(offset * 0.707, 0, -offset * 0.707);
+            } else if (seatNumber == 4) {
+                double offset = startOffset + i * cardSpacing;
+                spawnLoc = baseLoc.clone().add(offset * 0.707, 0, offset * 0.707);
+            } else {
+                spawnLoc = baseLoc.clone().add(startOffset + (i * cardSpacing), 0, 0);
             }
 
-            translation.set(xOffset, playerHeight, zOffset);
-            Transformation currentTransform = display.getTransformation();
-            Transformation newTransform = new Transformation(
-                translation, currentTransform.getLeftRotation(), currentTransform.getScale(), currentTransform.getRightRotation()
-            );
-            display.setTransformation(newTransform);
+            ItemDisplay display = createCardDisplay(spawnLoc, card, false, seatNumber);
             playerCardDisplays.get(player).add(display);
         }
 
-        int handValue = gameEngine.calculateHandValue(hand);
-        // Send colorized hand info - more compact and readable
-        player.sendMessage(configManager.formatMessage("hand-display", 
-            "hand", formatHand(hand), 
-            "hand_value", formatHandValue(handValue)));
+        updatePlayerPrivateDisplay(player, hand);
+    }
+
+    public void updatePlayerPrivateDisplay(Player player, List<Card> hand) {
+        if (!player.isOnline()) return;
+        Integer seatNumber = playerSeats.get(player);
+        if (seatNumber == null) return;
+
+        Location cardBase = getPlayerCardBaseLocation(seatNumber);
+        Location textLoc = cardBase.clone().add(0, 0.35, 0);
+
+        TextDisplay display = playerPrivateDisplays.get(player);
+        if (display == null || display.isDead() || !display.isValid()) {
+            display = centerLoc.getWorld().spawn(textLoc, TextDisplay.class, d -> {
+                d.setBillboard(Display.Billboard.CENTER);
+                d.setPersistent(false);
+                d.addScoreboardTag("blackjack-entity");
+                d.addScoreboardTag(getTableDisplayTag());
+            });
+            playerPrivateDisplays.put(player, display);
+        }
+
+        int val = gameEngine.calculateHandValue(hand);
+        String text;
+        if (gameEngine.isBusted(hand)) {
+            text = "§c§lEl: " + val + " §4(PATLADI)";
+        } else if (val == 21 && hand.size() == 2) {
+            text = "§6§lEl: 21 §a★ BLACKJACK";
+        } else if (val == 21) {
+            text = "§6§lEl: 21 §a★";
+        } else {
+            text = "§a§lEl: §f" + val + " §7/ 21";
+        }
+
+        if (gameInProgress && player.equals(currentPlayer)) {
+            boolean canDouble = hand.size() == 2 && !doubleDownPlayers.contains(player) && configManager.isDoubleDownEnabled();
+            text += "\n§e[Sol Tık: Çek §7| §eSağ Tık: Pas" + (canDouble ? " §7| §eShift: 2x]" : "]");
+        }
+
+        display.setText(text);
+
+        TextDisplay finalDisplay = display;
+        for (Player online : Bukkit.getOnlinePlayers()) {
+            if (!online.getUniqueId().equals(player.getUniqueId())) {
+                online.hideEntity(plugin, finalDisplay);
+            } else {
+                online.showEntity(plugin, finalDisplay);
+            }
+        }
+    }
+
+    public void updateAllPlayerPrivateDisplays() {
+        for (Player p : players) {
+            List<Card> hand = playerHands.get(p);
+            if (hand != null && !hand.isEmpty()) {
+                updatePlayerPrivateDisplay(p, hand);
+            }
+        }
     }
 
     private void updateDealerDisplays() {
-        for (Player player : players) {
-            if (playerDealerDisplays.containsKey(player)) {
-                for (ItemDisplay display : playerDealerDisplays.get(player)) {
-                    removeTrackedDisplay(display);
-                }
-                playerDealerDisplays.get(player).clear();
+        for (ItemDisplay display : dealerCardDisplays) {
+            removeTrackedDisplay(display);
+        }
+        dealerCardDisplays.clear();
+
+        if (dealerHand.isEmpty()) {
+            if (croupierNPC != null) {
+                croupierNPC.updateScoreDisplay("§6§lKRUPİYE");
             }
+            return;
         }
 
-        for (Player player : players) {
-            playerDealerDisplays.putIfAbsent(player, new ArrayList<>());
-            List<ItemDisplay> dealerDisplays = new ArrayList<>();
-            int seatNumber = playerSeats.get(player);
-            Location baseDisplayLoc = centerLoc.clone();
-            double cardSpacing = configManager.getCardSpacing();
-            double dealerHeight = configManager.getDealerCardHeight();
-            double distanceFromCenter = 0.75; // Original hardcoded value
-            
-            if (!dealerHand.isEmpty()) {
-                Card dealerVisibleCard = dealerHand.get(0);
-                // More compact dealer card message
-                player.sendMessage(configManager.formatMessage("dealer-shows", 
-                    "card", formatCard(dealerVisibleCard), 
-                    "value", dealerVisibleCard.getValue()));
-            }
+        Location baseDisplayLoc = centerLoc.clone().add(0, 0.82, -0.6);
+        double cardSpacing = 0.35;
+        double startX = -((dealerHand.size() - 1) * cardSpacing) / 2.0;
 
-            for (int i = 0; i < dealerHand.size(); i++) {
-                Card card = dealerHand.get(i);
-                Location spawnLoc = baseDisplayLoc.clone();
-                Card displayCard = gameInProgress && i > 0 ? null : card;
-                ItemDisplay display = createCardDisplay(spawnLoc, displayCard, true, seatNumber);
-                Vector3f translation = new Vector3f();
-                float xOffset = 0.0f;
-                float zOffset = 0.0f;
-                
-                switch (seatNumber) {
-                    case 0:
-                        xOffset = (float)distanceFromCenter;
-                        zOffset = (float)(i * cardSpacing - (dealerHand.size() - 1) * cardSpacing / 2.0);
-                        break;
-                    case 1:
-                        xOffset = (float)(i * cardSpacing - (dealerHand.size() - 1) * cardSpacing / 2.0);
-                        zOffset = (float)distanceFromCenter;
-                        break;
-                    case 2:
-                        xOffset = (float)(-distanceFromCenter);
-                        zOffset = (float)(-(i * cardSpacing) + (dealerHand.size() - 1) * cardSpacing / 2.0);
-                        break;
-                    case 3:
-                        xOffset = (float)(-(i * cardSpacing) + (dealerHand.size() - 1) * cardSpacing / 2.0);
-                        zOffset = (float)(-distanceFromCenter);
+        for (int i = 0; i < dealerHand.size(); i++) {
+            Card card = dealerHand.get(i);
+            Card displayCard = (gameInProgress && !settlingResults && i > 0) ? null : card;
+            Location spawnLoc = baseDisplayLoc.clone().add(startX + (i * cardSpacing), 0, 0);
+            ItemDisplay display = createCardDisplay(spawnLoc, displayCard, true, 2);
+            dealerCardDisplays.add(display);
+        }
+
+        if (croupierNPC != null) {
+            if (gameInProgress && !settlingResults && dealerHand.size() >= 2) {
+                Card visibleCard = dealerHand.get(0);
+                croupierNPC.updateScoreDisplay("§6§lKASA: §e" + visibleCard.getValue());
+            } else {
+                int total = gameEngine.calculateHandValue(dealerHand);
+                if (total > 21) {
+                    croupierNPC.updateScoreDisplay("§c§lKASA: §4" + total + " (PATLADI)");
+                } else if (total == 21) {
+                    croupierNPC.updateScoreDisplay("§6§lKASA: §e21 §6★");
+                } else {
+                    croupierNPC.updateScoreDisplay("§6§lKASA: §f" + total);
                 }
-
-                translation.set(xOffset, dealerHeight, zOffset);
-                Transformation currentTransform = display.getTransformation();
-                Transformation newTransform = new Transformation(
-                    translation, currentTransform.getLeftRotation(), currentTransform.getScale(), currentTransform.getRightRotation()
-                );
-                display.setTransformation(newTransform);
-                dealerDisplays.add(display);
             }
-
-            playerDealerDisplays.put(player, dealerDisplays);
         }
     }
     
     private void clearAllDisplays() {
         purgeTrackedDisplays();
 
-        // Clear displays for all players (not just current players list)
         for (List<ItemDisplay> cardDisplays : playerCardDisplays.values()) {
             if (cardDisplays != null) {
-                cardDisplays.forEach(display -> {
-                    removeTrackedDisplay(display);
-                });
+                cardDisplays.forEach(this::removeTrackedDisplay);
             }
         }
-        
-        for (List<ItemDisplay> dealerDisplays : playerDealerDisplays.values()) {
-            if (dealerDisplays != null) {
-                dealerDisplays.forEach(display -> {
-                    removeTrackedDisplay(display);
-                });
-            }
-        }
-        
         playerCardDisplays.clear();
-        playerDealerDisplays.clear();
+
+        for (ItemDisplay display : dealerCardDisplays) {
+            removeTrackedDisplay(display);
+        }
+        dealerCardDisplays.clear();
+
+        for (TextDisplay display : playerPrivateDisplays.values()) {
+            if (display != null && !display.isDead()) {
+                display.remove();
+            }
+        }
+        playerPrivateDisplays.clear();
     }
     
+    public CroupierNPC getCroupierNPC() {
+        return croupierNPC;
+    }
+
+    public void setPlayerRoundBet(Player player, int amount) {
+        roundBets.put(player, amount);
+        plugin.getPlayerBets().put(player, amount);
+    }
+
+    public void updateFeltMaterial(Material newFelt) {
+        settings.setFeltMaterial(newFelt);
+        if (tableModel != null) {
+            tableModel.updateFelt(newFelt);
+        }
+    }
+
     /**
      * Cleanup all resources for this table
      */
     public void cleanup() {
+        if (croupierNPC != null) {
+            croupierNPC.destroy();
+            croupierNPC = null;
+        }
         if (tableModel != null) {
             tableModel.destroy();
         }
@@ -1203,7 +1348,8 @@ public class BlackjackTable {
         finishedPlayers.clear();
         doubleDownPlayers.clear();
         playerCardDisplays.clear();
-        playerDealerDisplays.clear();
+        dealerCardDisplays.clear();
+        playerPrivateDisplays.clear();
         lastMessageTime.clear();
         roundBets.clear();
         settlingResults = false;
