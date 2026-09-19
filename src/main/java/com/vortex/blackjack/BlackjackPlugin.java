@@ -59,6 +59,7 @@ public class BlackjackPlugin extends JavaPlugin implements Listener {
     
     // Version checker
     private VersionChecker versionChecker;
+    private com.vortex.blackjack.listener.PacketEventsListener packetListener;
     
     // Player data - thread-safe collections
     private final Map<Player, Integer> playerBets = new ConcurrentHashMap<>();
@@ -69,15 +70,6 @@ public class BlackjackPlugin extends JavaPlugin implements Listener {
     // Files
     private File statsFile;
     
-    @Override
-    public void onLoad() {
-        com.github.retrooper.packetevents.PacketEvents.setAPI(
-                io.github.retrooper.packetevents.factory.spigot.SpigotPacketEventsBuilder.build(this)
-        );
-        com.github.retrooper.packetevents.PacketEvents.getAPI().getSettings().checkForUpdates(false).bStats(false);
-        com.github.retrooper.packetevents.PacketEvents.getAPI().load();
-    }
-
     @Override
     public void onEnable() {
         // Create and update configuration files before managers read them.
@@ -161,18 +153,21 @@ public class BlackjackPlugin extends JavaPlugin implements Listener {
         int statsSaveInterval = configManager.getStatsSaveInterval();
         long ticks = statsSaveInterval * 20L; // Convert seconds to ticks (20 ticks = 1 second)
         asyncUtils.scheduleRepeating("stats-autosave", this::savePlayerStats, ticks, ticks);
-        // Initialize PacketEvents
-        com.github.retrooper.packetevents.PacketEvents.getAPI().init();
+        // The standalone PacketEvents dependency owns its API lifecycle.
+        packetListener = new com.vortex.blackjack.listener.PacketEventsListener(this);
         com.github.retrooper.packetevents.PacketEvents.getAPI().getEventManager()
-                .registerListener(new com.vortex.blackjack.listener.PacketEventsListener(this));
+                .registerListener(packetListener);
 
         getLogger().info("Blackjack enabled successfully!");
     }
     
     @Override
     public void onDisable() {
-        // Terminate PacketEvents
-        com.github.retrooper.packetevents.PacketEvents.getAPI().terminate();
+        if (packetListener != null) {
+            com.github.retrooper.packetevents.PacketEvents.getAPI().getEventManager()
+                    .unregisterListener(packetListener);
+            packetListener = null;
+        }
 
         // Unregister PlaceholderAPI expansion
         if (placeholderExpansion != null) {
@@ -421,10 +416,16 @@ public class BlackjackPlugin extends JavaPlugin implements Listener {
 
         // Asynchronously load player stats into cache if stats tracker is enabled
         if (configManager.isStatsTrackerEnabled() && databaseManager != null) {
+            UUID uuid = player.getUniqueId();
             getServer().getScheduler().runTaskAsynchronously(this, () -> {
-                PlayerStats stats = databaseManager.loadPlayerStats(player.getUniqueId());
-                if (stats == null) stats = new PlayerStats();
-                playerStats.put(player.getUniqueId(), stats);
+                PlayerStats loaded = databaseManager.loadPlayerStats(uuid);
+                PlayerStats stats = loaded != null ? loaded : new PlayerStats();
+                getServer().getScheduler().runTask(this, () -> {
+                    // Ignore old login completions and preserve newer cached data.
+                    if (player.isOnline() && getServer().getPlayer(uuid) == player) {
+                        playerStats.putIfAbsent(uuid, stats);
+                    }
+                });
             });
         }
     }
@@ -440,6 +441,11 @@ public class BlackjackPlugin extends JavaPlugin implements Listener {
         // Remove from table if they're at one
         if (tableManager != null) {
             tableManager.removePlayerFromTable(player, configManager.getLeaveReason("disconnected"));
+            for (BlackjackTable table : tableManager.getTables()) {
+                if (table.getCroupierNPC() != null) {
+                    table.getCroupierNPC().hide(player);
+                }
+            }
         }
         
         // Asynchronously persist player stats to DB on quit if enabled

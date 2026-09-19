@@ -139,7 +139,7 @@ public class CroupierNPC {
         if (!player.isOnline()) return;
         seeingPlayers.add(player.getUniqueId());
 
-        UserProfile profile = new UserProfile(npcUUID, ChatColor.GOLD + "Krupiye");
+        UserProfile profile = new UserProfile(npcUUID, "Krupiye");
         // Must include both texture AND signature — clients on 1.21.x disconnect
         // if they receive a PlayerInfoUpdate with an unsigned texture property.
         String texture = (skinTexture != null && !skinTexture.isEmpty()) ? skinTexture : CroupierSkin.DEFAULT_TEXTURE;
@@ -172,9 +172,9 @@ public class CroupierNPC {
             PacketEvents.getAPI().getPlayerManager().sendPacket(player, spawnPacket);
 
             // 3. Set metadata (skin layers: hat, jacket, sleeves, pants)
-            // Index 16 for 1.21.9+, 17 for older versions (matching Roulette's MetadataModifier)
+            // Encode for the server protocol; ViaVersion translates afterwards.
             ServerVersion serverVersion = PacketEvents.getAPI().getServerManager().getVersion();
-            int skinLayerIndex = serverVersion.isNewerThanOrEquals(ServerVersion.V_1_21_2) ? 16 : 17;
+            int skinLayerIndex = skinLayerIndex(serverVersion);
             List<EntityData<?>> metadataList = List.of(
                     new EntityData<>(skinLayerIndex, EntityDataTypes.BYTE, ALL_SKIN_LAYERS)
             );
@@ -204,6 +204,11 @@ public class CroupierNPC {
     /**
      * Hides the NPC from a given player.
      */
+    static int skinLayerIndex(ServerVersion version) {
+        // In 1.21.9+, index 17 is absorption (FLOAT), not skin layers (BYTE).
+        return version.isNewerThanOrEquals(ServerVersion.V_1_21_9) ? 16 : 17;
+    }
+
     public void hide(Player player) {
         seeingPlayers.remove(player.getUniqueId());
         if (!player.isOnline()) return;
