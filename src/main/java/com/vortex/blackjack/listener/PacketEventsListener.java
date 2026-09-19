@@ -24,7 +24,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * PacketEvents listener handling:
- * 1. PLAYER_INPUT & STEER_VEHICLE: Space key detection while seated to reopen BettingGUI.
+ * 1. PLAYER_INPUT & STEER_VEHICLE: Space opens betting before a game and doubles down during a turn.
  * 2. UPDATE_SIGN: Captures virtual SignGUI text input for custom bets.
  * 3. INTERACT_ENTITY: Shift + right-click on Croupier NPC to open admin settings.
  */
@@ -85,9 +85,11 @@ public class PacketEventsListener extends PacketListenerAbstract {
             BlackjackTable table = plugin.getTableManager().getPlayerTable(player);
             if (table == null) return;
 
-            // Only allow changing bet before cards are dealt
+            // During an active turn, Space is the dedicated Double Down input.
             if (table.isGameInProgress()) {
-                player.sendMessage("§cOyun devam ederken bahsinizi değiştiremezsiniz!");
+                if (table.isPlayerTurn(player)) {
+                    table.doubleDown(player);
+                }
                 return;
             }
 

@@ -119,11 +119,6 @@ public class LeaveConfirmGUI implements InventoryHolder {
 
     public void open() {
         player.openInventory(inventory);
-        player.sendTitle(
-                configManager.formatMessage("confirm-leave-gui.open-title", "amount", betAmount),
-                configManager.formatMessage("confirm-leave-gui.open-subtitle", "amount", betAmount),
-                5, 45, 10
-        );
         player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_BASS, 1.0f, 0.5f);
         player.sendMessage(configManager.formatMessage("confirm-leave-gui.open-warn-message", "amount", betAmount));
     }
@@ -158,11 +153,6 @@ public class LeaveConfirmGUI implements InventoryHolder {
         table.removePlayer(player, reason, true);
         plugin.getPlayerPersistentBets().remove(player);
 
-        player.sendTitle(
-                configManager.formatMessage("confirm-leave-gui.forfeit-title", "amount", betAmount),
-                configManager.formatMessage("confirm-leave-gui.forfeit-subtitle", "amount", betAmount),
-                5, 40, 10
-        );
         player.playSound(player.getLocation(), Sound.ENTITY_ITEM_BREAK, 1.0f, 0.8f);
     }
 

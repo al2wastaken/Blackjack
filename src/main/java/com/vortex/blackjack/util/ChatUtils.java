@@ -2,6 +2,7 @@ package com.vortex.blackjack.util;
 
 import net.md_5.bungee.api.chat.ClickEvent;
 import net.md_5.bungee.api.chat.TextComponent;
+import net.md_5.bungee.api.ChatMessageType;
 import org.bukkit.ChatColor;
 import org.bukkit.entity.Player;
 import com.vortex.blackjack.config.ConfigManager;
@@ -49,41 +50,11 @@ public class ChatUtils {
      * Create a game action bar with clickable options
      */
     public void sendGameActionBar(Player player, boolean showDoubleDown) {
-        if (!configManager.isInteractiveChatButtonsEnabled()) {
-            player.sendMessage(configManager.getGameActionPrompt() + "(/bj hit, /bj stand" 
-                + (showDoubleDown && configManager.isDoubleDownEnabled() ? ", /bj doubledown" : "") + ")");
-            return;
-        }
-
-        TextComponent hitButton = GenericUtils.createClickableButton(
-            configManager.getButtonText("hit"), 
-            configManager.getButtonCommand("hit"), 
-            configManager.getButtonHover("hit"));
-        
-        TextComponent standButton = GenericUtils.createClickableButton(
-            configManager.getButtonText("stand"), 
-            configManager.getButtonCommand("stand"), 
-            configManager.getButtonHover("stand"));
-        
-        TextComponent separator = new TextComponent(configManager.getGameActionSeparator());
-        
-        // Combine components
-        TextComponent fullMessage = new TextComponent(configManager.getGameActionPrompt());
-        fullMessage.addExtra(hitButton);
-        fullMessage.addExtra(separator);
-        fullMessage.addExtra(standButton);
-        
-        // Add doubledown button if appropriate and enabled
+        String message = "§aSol Tık: Çek §7| §eSağ Tık: Pas";
         if (showDoubleDown && configManager.isDoubleDownEnabled()) {
-            TextComponent doubleDownButton = GenericUtils.createClickableButton(
-                configManager.getButtonText("double-down"), 
-                configManager.getButtonCommand("double-down"), 
-                configManager.getButtonHover("double-down"));
-            fullMessage.addExtra(separator);
-            fullMessage.addExtra(doubleDownButton);
+            message += " §7| §bSpace: İkiye Katla";
         }
-        
-        player.spigot().sendMessage(fullMessage);
+        player.spigot().sendMessage(ChatMessageType.ACTION_BAR, new TextComponent(message));
     }
     
     /**

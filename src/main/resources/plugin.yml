@@ -4,9 +4,12 @@ main: com.vortex.blackjack.BlackjackPlugin
 description: Minecraft için fiziksel 3D masalı Blackjack (21) eklentisi
 api-version: 1.21
 depend: [packetevents, Vault]
-softdepend: [PlaceholderAPI]
+# PhysicalEconomy must register its Vault service before Blackjack asks Vault for it.
+# Keep this as a soft dependency: the plugin still supports every Vault economy provider.
+softdepend: [PlaceholderAPI, PhysicalEconomy]
 loadbefore: []
-load: STARTUP
+# Economy plugins normally register their providers during the POSTWORLD phase.
+load: POSTWORLD
 
 commands:
   blackjack:

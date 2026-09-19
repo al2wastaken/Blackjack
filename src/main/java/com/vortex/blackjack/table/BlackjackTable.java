@@ -12,11 +12,15 @@ import com.vortex.blackjack.model.Deck;
 import com.vortex.blackjack.util.ChatUtils;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
+import org.bukkit.Color;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.Sound;
 import org.bukkit.World;
+import org.bukkit.boss.BarColor;
+import org.bukkit.boss.BarStyle;
+import org.bukkit.boss.BossBar;
 import org.bukkit.entity.Display;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.ItemDisplay;
@@ -46,6 +50,14 @@ import java.util.concurrent.ConcurrentHashMap;
  * PacketEvents Player-NPC Croupier, private hand TextDisplays, and 5-chair layout.
  */
 public class BlackjackTable {
+    // The felt is a BlockDisplay beginning at Y=0.75 with 0.15 blocks of height
+    // (TableSurfaceGeometry.felt), so its top is Y=0.90 relative to centerLoc.
+    // ItemDisplay card models need clear air above that surface to avoid being
+    // clipped by the felt or the wooden rim.
+    private static final double CARD_SURFACE_Y_OFFSET = 1.00;
+    // Card displays are 0.35 blocks wide. Match that width exactly so cards
+    // touch edge-to-edge without a visible gap or model overlap.
+    private static final double PLAYER_CARD_SPACING = 0.35;
     private final BlackjackPlugin plugin;
     private final TableManager tableManager;
     private final ConfigManager configManager;
@@ -65,6 +77,11 @@ public class BlackjackTable {
     // Countdown task & remaining seconds
     private BukkitTask countdownTask;
     private int countdownRemaining = 0;
+    private BukkitTask turnTimeoutTask;
+    private static final long TURN_TIMEOUT_TICKS = 10L * 20L;
+    private static final int TURN_TIMEOUT_SECONDS = 10;
+    private int turnSecondsRemaining;
+    private final Map<UUID, BossBar> turnBossBars = new ConcurrentHashMap<>();
 
     // Game state
     private final List<Player> players = new ArrayList<>();
@@ -74,6 +91,9 @@ public class BlackjackTable {
     private final Set<Player> doubleDownPlayers = ConcurrentHashMap.newKeySet();
     private boolean gameInProgress = false;
     private boolean settlingResults = false;
+    // Becomes true with the first physical/virtual card dealt in a round.
+    // Before that point players are still in the betting-selection phase.
+    private boolean cardsHaveBeenDealt = false;
     private Player currentPlayer;
     private List<Card> dealerHand = new ArrayList<>();
     private Deck deck = new Deck();
@@ -116,6 +136,7 @@ public class BlackjackTable {
         croupierLoc.setPitch(0.0f);
         String skinTexture = CroupierSkin.getPresetOrDefault(settings.getCroupierSkin());
         this.croupierNPC = new CroupierNPC(plugin, this, croupierLoc, skinTexture);
+        updateCroupierIdleDisplay();
         this.croupierNPC.updateAllNearby();
     }
 
@@ -318,6 +339,7 @@ public class BlackjackTable {
                 }
                 
                 broadcastTableMessage(configManager.formatMessage("player-joined-table", "player", player.getName()));
+                updateCroupierIdleDisplay();
 
                 // Immediately open BettingGUI for the newly seated player
                 Bukkit.getScheduler().runTaskLater(plugin, () -> {
@@ -368,6 +390,8 @@ public class BlackjackTable {
     public void removePlayer(Player player, String reason, boolean forceForfeit) {
         synchronized (this) {
             if (!players.contains(player)) return;
+            int removedPlayerIndex = players.indexOf(player);
+            boolean wasCurrentPlayer = player.equals(currentPlayer);
             
             Integer betAmount = plugin.getPlayerBets().get(player);
 
@@ -379,6 +403,10 @@ public class BlackjackTable {
             
             // Cleanup player data
             players.remove(player);
+            removeTurnBossBar(player);
+            if (!gameInProgress && !settlingResults) {
+                updateCroupierIdleDisplay();
+            }
             playerSeats.remove(player);
             playerHands.remove(player);
             finishedPlayers.remove(player);
@@ -387,14 +415,16 @@ public class BlackjackTable {
             
             // Handle bet refund vs forfeit:
             // Case 1: Dismount before game starts -> 100% full refund!
-            if (!gameInProgress && betAmount != null && betAmount > 0) {
+            if (!gameInProgress && !settlingResults && betAmount != null && betAmount > 0) {
                 plugin.getPlayerBets().remove(player);
                 roundBets.remove(player);
                 plugin.getEconomyProvider().add(player.getUniqueId(), BigDecimal.valueOf(betAmount));
                 player.sendMessage("§aMasadan kalktınız. Bahsiniz (§e" + betAmount + "₺§a) eksiksiz iade edildi.");
             }
-            // Case 2: Confirmed leave mid-game -> Bet forfeited
-            else if (forceForfeit && betAmount != null && betAmount > 0) {
+            // Once the croupier begins dealing, an early departure always
+            // forfeits the active bet. This intentionally overrides the
+            // optional refund-on-leave setting for an already-started round.
+            else if ((forceForfeit || cardsHaveBeenDealt || settlingResults) && betAmount != null && betAmount > 0) {
                 plugin.getPlayerBets().remove(player);
                 roundBets.remove(player);
                 player.sendMessage(configManager.formatMessage("left-table-bet-forfeit", "amount", betAmount));
@@ -434,10 +464,14 @@ public class BlackjackTable {
             // Handle game state
             if (players.isEmpty()) {
                 cancelCountdown();
+                cancelTurnTimeout();
                 resetGameState();
                 clearAllDisplays();
-            } else if (gameInProgress && player.equals(currentPlayer)) {
-                nextTurn();
+                resetCroupierLabel();
+            } else if (gameInProgress && wasCurrentPlayer) {
+                // The next seat shifts into the removed player's former index.
+                // Start there so a departure never restarts the order at seat 0.
+                selectNextTurn(removedPlayerIndex);
             }
         }
     }
@@ -491,36 +525,77 @@ public class BlackjackTable {
             // Initialize game
             gameInProgress = true;
             settlingResults = false;
+            cardsHaveBeenDealt = false;
             deck = new Deck();
             clearAllDisplays();
             finishedPlayers.clear();
             doubleDownPlayers.clear();
             roundBets.clear();
             
-            // Deal initial cards (2 per player)
+            // Prepare empty hands. The initial cards are then dealt one by one
+            // so every card has a matching croupier animation and sound.
             for (Player player : players) {
-                List<Card> hand = new ArrayList<>();
-                hand.add(deck.drawCard());
-                hand.add(deck.drawCard());
-                playerHands.put(player, hand);
+                playerHands.put(player, new ArrayList<>());
                 roundBets.put(player, plugin.getPlayerBets().getOrDefault(player, 0));
-                updateCardDisplays(player, hand);
             }
-            
-            // Deal dealer cards
             dealerHand = new ArrayList<>();
-            dealerHand.add(deck.drawCard());
-            dealerHand.add(deck.drawCard());
-            updateDealerDisplays();
-            
-            // Start first player's turn
-            currentPlayer = players.get(0);
-            updateAllPlayerPrivateDisplays();
-            broadcastTableMessage(configManager.formatMessage("game-started", "player", currentPlayer.getName()));
-            
-            // Send interactive turn message (doubledown available on first turn)
-            chatUtils.sendGameActionBar(currentPlayer, true);
+            dealInitialCardsSequentially(new ArrayList<>(players), 0, 0);
         }
+    }
+
+    /**
+     * Deals two rounds in casino order: every seated player, then the croupier.
+     * A small delay between cards lets the arm animation and the newly placed
+     * card be visible instead of all displays appearing at once.
+     */
+    private void dealInitialCardsSequentially(List<Player> dealingOrder, int round, int playerIndex) {
+        if (!gameInProgress || settlingResults) {
+            return;
+        }
+
+        if (round >= 2) {
+            beginFirstTurnAfterInitialDeal();
+            return;
+        }
+
+        if (playerIndex < dealingOrder.size()) {
+            Player player = dealingOrder.get(playerIndex);
+            Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                if (!gameInProgress || settlingResults) return;
+                if (players.contains(player)) {
+                    cardsHaveBeenDealt = true;
+                    List<Card> hand = playerHands.computeIfAbsent(player, ignored -> new ArrayList<>());
+                    hand.add(deck.drawCard());
+                    if (croupierNPC != null) croupierNPC.swingArm();
+                    playCardSound(player.getLocation());
+                    updateCardDisplays(player, hand);
+                }
+                dealInitialCardsSequentially(dealingOrder, round, playerIndex + 1);
+            }, 12L);
+            return;
+        }
+
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            if (!gameInProgress || settlingResults) return;
+            cardsHaveBeenDealt = true;
+            dealerHand.add(deck.drawCard());
+            if (croupierNPC != null) croupierNPC.swingArm();
+            playCardSound(centerLoc);
+            updateDealerDisplays();
+            dealInitialCardsSequentially(dealingOrder, round + 1, 0);
+        }, 12L);
+    }
+
+    private void beginFirstTurnAfterInitialDeal() {
+        if (!gameInProgress || players.isEmpty()) {
+            return;
+        }
+
+        currentPlayer = players.get(0);
+        updateAllPlayerPrivateDisplays();
+        broadcastTableMessage(configManager.formatMessage("game-started", "player", currentPlayer.getName()));
+        chatUtils.sendGameActionBar(currentPlayer, true);
+        startTurnTimeout(currentPlayer);
     }
     
     /**
@@ -555,6 +630,8 @@ public class BlackjackTable {
             } else {
                 // Send action buttons again (no doubledown after hitting)
                 chatUtils.sendGameActionBar(player, false);
+                // A successful hit starts a fresh ten-second decision window.
+                startTurnTimeout(player);
             }
         }
     }
@@ -617,7 +694,11 @@ public class BlackjackTable {
             
             // Double the bet
             plugin.getEconomyProvider().subtract(player.getUniqueId(), java.math.BigDecimal.valueOf(currentBet));
-            plugin.getPlayerBets().put(player, currentBet * 2);
+            int doubledBet = currentBet * 2;
+            plugin.getPlayerBets().put(player, doubledBet);
+            // Payouts use roundBets, not the temporary betting map. Keep the
+            // round total in sync so a 10 -> 20 double down pays from 20.
+            roundBets.put(player, doubledBet);
             
             // Mark player as doubled down
             doubleDownPlayers.add(player);
@@ -650,21 +731,28 @@ public class BlackjackTable {
     }
     
     private void nextTurn() {
+        cancelTurnTimeout();
         if (finishedPlayers.size() >= players.size()) {
             endGame();
             return;
         }
-        
+
         int currentIndex = players.indexOf(currentPlayer);
+        selectNextTurn(currentIndex + 1);
+    }
+
+    /** Selects the first active player at or after {@code nextIndex}. */
+    private void selectNextTurn(int nextIndex) {
+        cancelTurnTimeout();
+        if (players.isEmpty() || finishedPlayers.size() >= players.size()) {
+            endGame();
+            return;
+        }
+
         int attempts = 0;
         do {
-            currentIndex = (currentIndex + 1) % players.size();
-            currentPlayer = players.get(currentIndex);
+            currentPlayer = players.get(Math.floorMod(nextIndex + attempts, players.size()));
             attempts++;
-            if (attempts >= players.size()) {
-                endGame();
-                return;
-            }
         } while (finishedPlayers.contains(currentPlayer));
         
         if (currentPlayer != null && !finishedPlayers.contains(currentPlayer)) {
@@ -674,17 +762,88 @@ public class BlackjackTable {
             boolean canDoubleDown = hand != null && hand.size() == 2 && !doubleDownPlayers.contains(currentPlayer);
             chatUtils.sendGameActionBar(currentPlayer, canDoubleDown);
             updateAllPlayerPrivateDisplays();
+            startTurnTimeout(currentPlayer);
         } else {
             endGame();
         }
+    }
+
+    private void startTurnTimeout(Player player) {
+        cancelTurnTimeout();
+        turnSecondsRemaining = TURN_TIMEOUT_SECONDS;
+        updatePlayerTurnBossBars(player);
+        turnTimeoutTask = Bukkit.getScheduler().runTaskTimer(plugin, () -> {
+            synchronized (BlackjackTable.this) {
+                if (!gameInProgress || settlingResults || !player.equals(currentPlayer) || !players.contains(player)) {
+                    return;
+                }
+                turnSecondsRemaining--;
+                if (turnSecondsRemaining > 0) {
+                    updatePlayerTurnBossBars(player);
+                    return;
+                }
+                finishedPlayers.add(player);
+                broadcastTableMessage("§e" + player.getName() + " §7hamle süresini doldurdu; eli pas geçildi.");
+                nextTurn();
+            }
+        }, 20L, 20L);
+    }
+
+    private void cancelTurnTimeout() {
+        if (turnTimeoutTask != null) {
+            turnTimeoutTask.cancel();
+            turnTimeoutTask = null;
+        }
+    }
+
+    private void updatePlayerTurnBossBars(Player activePlayer) {
+        String title = "§fSıra: §e" + activePlayer.getName() + " §7| §f" + turnSecondsRemaining + " saniye";
+        double progress = Math.max(0.0, Math.min(1.0, turnSecondsRemaining / (double) TURN_TIMEOUT_SECONDS));
+        for (Player viewer : players) {
+            if (!viewer.isOnline()) continue;
+            BossBar bar = turnBossBars.computeIfAbsent(viewer.getUniqueId(), ignored ->
+                    Bukkit.createBossBar(title, BarColor.RED, BarStyle.SOLID));
+            bar.setTitle(title);
+            bar.setColor(viewer.equals(activePlayer) ? BarColor.GREEN : BarColor.RED);
+            bar.setProgress(progress);
+            if (!bar.getPlayers().contains(viewer)) bar.addPlayer(viewer);
+            bar.setVisible(true);
+        }
+    }
+
+    private void showCroupierTurnBossBars() {
+        for (Player viewer : players) {
+            if (!viewer.isOnline()) continue;
+            BossBar bar = turnBossBars.computeIfAbsent(viewer.getUniqueId(), ignored ->
+                    Bukkit.createBossBar("§fKrupiyer kart çekiyor...", BarColor.WHITE, BarStyle.SOLID));
+            bar.setTitle("§fKrupiyer kart çekiyor...");
+            bar.setColor(BarColor.WHITE);
+            bar.setProgress(1.0);
+            if (!bar.getPlayers().contains(viewer)) bar.addPlayer(viewer);
+            bar.setVisible(true);
+        }
+    }
+
+    private void removeTurnBossBar(Player player) {
+        BossBar bar = turnBossBars.remove(player.getUniqueId());
+        if (bar != null) bar.removeAll();
+    }
+
+    private void clearTurnBossBars() {
+        for (BossBar bar : turnBossBars.values()) {
+            bar.removeAll();
+        }
+        turnBossBars.clear();
     }
     
     private void endGame() {
         synchronized (this) {
             if (!gameInProgress || settlingResults) return;
+            cancelTurnTimeout();
             
             gameInProgress = false;
             settlingResults = true;
+            showCroupierTurnBossBars();
             
             // Remove turn hints from player displays
             updateAllPlayerPrivateDisplays();
@@ -754,6 +913,9 @@ public class BlackjackTable {
             resetGameState();
             settlingResults = false;
             roundBets.clear();
+            clearTurnBossBars();
+
+            updateCroupierIdleDisplay();
 
             if (!players.isEmpty()) {
                 broadcastTableMessage(configManager.getMessage("game-ended"));
@@ -771,12 +933,30 @@ public class BlackjackTable {
     }
     
     private void resetGameState() {
+        cancelTurnTimeout();
+        gameInProgress = false;
+        cardsHaveBeenDealt = false;
         currentPlayer = null;
         finishedPlayers.clear();
         doubleDownPlayers.clear();
         playerHands.clear();
         dealerHand.clear();
         deck = new Deck();
+    }
+
+    private void resetCroupierLabel() {
+        updateCroupierIdleDisplay();
+    }
+
+    private void updateCroupierIdleDisplay() {
+        if (croupierNPC == null) return;
+        int capacity = chairs.isEmpty() ? 5 : chairs.size();
+        croupierNPC.updateScoreDisplay(
+                "§6§lBLACKJACK\n" +
+                "§7Krupiye 17'de durur ve 16'da kart çeker\n" +
+                "§eAnında 21, 2.5x ödeme yapar\n\n" +
+                "§aKatılmak için sağ tıkla! §7(" + players.size() + "/" + capacity + ")"
+        );
     }
     
     private void handlePayout(Player player, int dealerValue) {
@@ -934,18 +1114,7 @@ public class BlackjackTable {
     
     private Transformation createCardTransformation(boolean isDealer, int seatNumber) {
         float xRotation = (float) (Math.PI / 2); // Lay flat on the table
-        float zRotation;
-
-        if (isDealer) {
-            zRotation = 0.0f; // Facing players (+Z)
-        } else {
-            switch (seatNumber) {
-                case 0 -> zRotation = (float) Math.toRadians(45.0);
-                case 1, 2, 3 -> zRotation = (float) Math.PI;
-                case 4 -> zRotation = (float) Math.toRadians(-45.0);
-                default -> zRotation = (float) Math.PI;
-            }
-        }
+        float zRotation = cardRotation(isDealer, seatNumber);
 
         return new Transformation(
             new Vector3f(0.0f, 0.0f, 0.0f),
@@ -953,6 +1122,20 @@ public class BlackjackTable {
             new Vector3f(0.35f, 0.35f, 0.35f),
             new AxisAngle4f(zRotation, 0.0f, 0.0f, 1.0f)
         );
+    }
+
+    private float cardRotation(boolean isDealer, int seatNumber) {
+        if (isDealer) {
+            return 0.0f; // Facing players (+Z)
+        }
+        return switch (seatNumber) {
+            // Corner players face the table from the opposite direction, so
+            // their cards need the diagonal angle plus 180 degrees.
+            case 0 -> (float) Math.toRadians(225.0);
+            case 1, 2, 3 -> (float) Math.PI;
+            case 4 -> (float) Math.toRadians(135.0);
+            default -> (float) Math.PI;
+        };
     }
     
     private ItemDisplay createCardDisplay(Location loc, Card card, boolean isDealer, int seatNumber) {
@@ -1022,11 +1205,13 @@ public class BlackjackTable {
         if (isCriticalMessage || lastTime == null || currentTime - lastTime > 1500) {
             // Check if message is already formatted (contains color codes or special characters)
             if (message.contains("§") || message.contains("&") || isCriticalMessage) {
-                // Send directly - already formatted
-                player.sendMessage(message);
+                // Game notifications belong in the action bar, not chat.
+                player.spigot().sendMessage(net.md_5.bungee.api.ChatMessageType.ACTION_BAR,
+                        new net.md_5.bungee.api.chat.TextComponent(message));
             } else {
-                // Wrap in table broadcast format
-                player.sendMessage(configManager.formatMessage("table-message-broadcast", "message", message));
+                player.spigot().sendMessage(net.md_5.bungee.api.ChatMessageType.ACTION_BAR,
+                        new net.md_5.bungee.api.chat.TextComponent(
+                                configManager.formatMessage("table-message-broadcast", "message", message)));
             }
             lastMessageTime.put(playerId, currentTime);
         }
@@ -1138,7 +1323,7 @@ public class BlackjackTable {
     
     public Location getPlayerCardBaseLocation(int seatNumber) {
         double tableX = centerLoc.getX();
-        double tableY = centerLoc.getY() + 0.82;
+        double tableY = centerLoc.getY() + CARD_SURFACE_Y_OFFSET;
         double tableZ = centerLoc.getZ();
         return switch (seatNumber) {
             case 0 -> new Location(centerLoc.getWorld(), tableX - 1.6, tableY, tableZ + 0.8);
@@ -1164,21 +1349,18 @@ public class BlackjackTable {
 
         playerCardDisplays.putIfAbsent(player, new ArrayList<>());
         Location baseLoc = getPlayerCardBaseLocation(seatNumber);
-        double cardSpacing = 0.22;
-        double startOffset = -((hand.size() - 1) * cardSpacing) / 2.0;
+        double startOffset = -((hand.size() - 1) * PLAYER_CARD_SPACING) / 2.0;
+        // The card's local X axis is its short, side-to-side edge after it is
+        // laid flat. Spread cards along that axis. The old corner-specific
+        // offsets followed the card's long axis, so cards at seats 0 and 4
+        // appeared stacked and skewed into one another.
+        double rotation = cardRotation(false, seatNumber);
 
         for (int i = 0; i < hand.size(); i++) {
             Card card = hand.get(i);
-            Location spawnLoc;
-            if (seatNumber == 0) {
-                double offset = startOffset + i * cardSpacing;
-                spawnLoc = baseLoc.clone().add(offset * 0.707, 0, -offset * 0.707);
-            } else if (seatNumber == 4) {
-                double offset = startOffset + i * cardSpacing;
-                spawnLoc = baseLoc.clone().add(offset * 0.707, 0, offset * 0.707);
-            } else {
-                spawnLoc = baseLoc.clone().add(startOffset + (i * cardSpacing), 0, 0);
-            }
+            double offset = startOffset + i * PLAYER_CARD_SPACING;
+            Location spawnLoc = baseLoc.clone().add(
+                    offset * Math.cos(rotation), 0, offset * Math.sin(rotation));
 
             ItemDisplay display = createCardDisplay(spawnLoc, card, false, seatNumber);
             playerCardDisplays.get(player).add(display);
@@ -1199,6 +1381,10 @@ public class BlackjackTable {
         if (display == null || display.isDead() || !display.isValid()) {
             display = centerLoc.getWorld().spawn(textLoc, TextDisplay.class, d -> {
                 d.setBillboard(Display.Billboard.CENTER);
+                d.setDefaultBackground(false);
+                d.setBackgroundColor(Color.fromARGB(0, 0, 0, 0));
+                d.setTransformation(new Transformation(
+                        new Vector3f(), new AxisAngle4f(), new Vector3f(0.2f, 0.2f, 0.2f), new AxisAngle4f()));
                 d.setPersistent(false);
                 d.addScoreboardTag("blackjack-entity");
                 d.addScoreboardTag(getTableDisplayTag());
@@ -1220,7 +1406,7 @@ public class BlackjackTable {
 
         if (gameInProgress && player.equals(currentPlayer)) {
             boolean canDouble = hand.size() == 2 && !doubleDownPlayers.contains(player) && configManager.isDoubleDownEnabled();
-            text += "\n§e[Sol Tık: Çek §7| §eSağ Tık: Pas" + (canDouble ? " §7| §eShift: 2x]" : "]");
+            text += "\n§e[Sol Tık: Çek §7| §eSağ Tık: Pas" + (canDouble ? " §7| §eİkiye katla: Boşluk]" : "]");
         }
 
         display.setText(text);
@@ -1251,13 +1437,11 @@ public class BlackjackTable {
         dealerCardDisplays.clear();
 
         if (dealerHand.isEmpty()) {
-            if (croupierNPC != null) {
-                croupierNPC.updateScoreDisplay("§6§lKRUPİYE");
-            }
+            updateCroupierIdleDisplay();
             return;
         }
 
-        Location baseDisplayLoc = centerLoc.clone().add(0, 0.82, -0.6);
+        Location baseDisplayLoc = centerLoc.clone().add(0, CARD_SURFACE_Y_OFFSET, -0.6);
         double cardSpacing = 0.35;
         double startX = -((dealerHand.size() - 1) * cardSpacing) / 2.0;
 
@@ -1329,6 +1513,8 @@ public class BlackjackTable {
      * Cleanup all resources for this table
      */
     public void cleanup() {
+        cancelTurnTimeout();
+        clearTurnBossBars();
         if (croupierNPC != null) {
             croupierNPC.destroy();
             croupierNPC = null;

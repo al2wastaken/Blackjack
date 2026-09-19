@@ -103,7 +103,10 @@
         </dependency>
         <dependency>
             <groupId>org.slf4j</groupId>
-            <artifactId>slf4j-simple</artifactId>
+            <!-- HikariCP's INFO output from slf4j-simple is written to stderr,
+                 which Paper labels as ERROR. Use the no-op binding and log
+                 connection failures through the plugin logger instead. -->
+            <artifactId>slf4j-nop</artifactId>
             <version>2.0.12</version>
             <scope>compile</scope>
         </dependency>

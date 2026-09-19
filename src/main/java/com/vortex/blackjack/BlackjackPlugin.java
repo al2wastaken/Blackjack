@@ -408,6 +408,20 @@ public class BlackjackPlugin extends JavaPlugin implements Listener {
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
+
+        // Croupiers are client-side PacketEvents NPCs. Tables are restored while
+        // nobody is online, so explicitly send their spawn packets to a player
+        // after the login sequence has completed.
+        getServer().getScheduler().runTaskLater(this, () -> {
+            if (!player.isOnline() || tableManager == null) {
+                return;
+            }
+            for (BlackjackTable table : tableManager.getTables()) {
+                if (table.getCroupierNPC() != null) {
+                    table.getCroupierNPC().checkVisibility(player);
+                }
+            }
+        }, 1L);
         
         // Check if player is admin and notify about updates if enabled
         if (configManager.isVersionCheckerEnabled() && player.hasPermission("blackjack.admin")) {
@@ -461,15 +475,24 @@ public class BlackjackPlugin extends JavaPlugin implements Listener {
     
     @EventHandler
     public void onPlayerMove(PlayerMoveEvent event) {
-        if (!configManager.isAutoLeaveDistanceEnabled()) {
-            return;
-        }
-
         Player player = event.getPlayer();
         
         // Only check if player moved to a different block (optimization)
         if (event.getFrom().getBlockX() == event.getTo().getBlockX() && 
             event.getFrom().getBlockZ() == event.getTo().getBlockZ()) {
+            return;
+        }
+
+        // Keep virtual croupiers in sync as players enter or leave their range.
+        if (tableManager != null) {
+            for (BlackjackTable table : tableManager.getTables()) {
+                if (table.getCroupierNPC() != null) {
+                    table.getCroupierNPC().checkVisibility(player);
+                }
+            }
+        }
+
+        if (!configManager.isAutoLeaveDistanceEnabled()) {
             return;
         }
         

@@ -58,18 +58,10 @@ public class TableInteractListener implements Listener {
         org.bukkit.event.block.Action action = event.getAction();
         if (action == org.bukkit.event.block.Action.LEFT_CLICK_AIR || action == org.bukkit.event.block.Action.LEFT_CLICK_BLOCK) {
             event.setCancelled(true);
-            if (player.isSneaking()) {
-                table.doubleDown(player);
-            } else {
-                table.hit(player);
-            }
+            table.hit(player);
         } else if (action == org.bukkit.event.block.Action.RIGHT_CLICK_AIR || action == org.bukkit.event.block.Action.RIGHT_CLICK_BLOCK) {
             event.setCancelled(true);
-            if (player.isSneaking()) {
-                table.doubleDown(player);
-            } else {
-                table.stand(player);
-            }
+            table.stand(player);
         }
     }
 
@@ -84,11 +76,14 @@ public class TableInteractListener implements Listener {
         // Turn controls for seated player clicking table/chair
         BlackjackTable seatedTable = tableManager.getPlayerTable(player);
         if (seatedTable != null && seatedTable.isGameInProgress() && seatedTable.isPlayerTurn(player)) {
-            if (player.isSneaking()) {
-                seatedTable.doubleDown(player);
-            } else {
-                seatedTable.stand(player);
-            }
+            seatedTable.stand(player);
+            return;
+        }
+
+        // A seated player is already mounted on this table's chair. Do not
+        // treat another table click as a new join attempt (and therefore do
+        // not show the misleading "inside vehicle" warning).
+        if (seatedTable != null) {
             return;
         }
 
@@ -162,8 +157,10 @@ public class TableInteractListener implements Listener {
         BlackjackTable table = tableManager.getPlayerTable(player);
         if (table != null) {
             Integer bet = plugin.getPlayerBets().get(player);
-            // Only require confirmation and forfeit if game is actively in progress
-            if (table.isGameInProgress() && plugin.getConfigManager().isLeaveConfirmGuiEnabled() && bet != null && bet > 0) {
+            // The dealer reveal/payout phase is still part of the active round.
+            // Leaving at any point after dealing begins must be confirmed and
+            // forfeits the active bet.
+            if (table.isBettingLocked() && plugin.getConfigManager().isLeaveConfirmGuiEnabled() && bet != null && bet > 0) {
                 if (player.getOpenInventory().getTopInventory().getHolder() instanceof com.vortex.blackjack.gui.LeaveConfirmGUI) {
                     event.setCancelled(true);
                     return;
@@ -236,11 +233,7 @@ public class TableInteractListener implements Listener {
             if (event.getDamager() instanceof Player player) {
                 BlackjackTable seatedTable = tableManager.getPlayerTable(player);
                 if (seatedTable != null && seatedTable.isGameInProgress() && seatedTable.isPlayerTurn(player)) {
-                    if (player.isSneaking()) {
-                        seatedTable.doubleDown(player);
-                    } else {
-                        seatedTable.hit(player);
-                    }
+                    seatedTable.hit(player);
                 }
             }
         }

@@ -28,6 +28,9 @@ import org.bukkit.World;
 import org.bukkit.entity.Display;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.TextDisplay;
+import org.bukkit.scoreboard.Scoreboard;
+import org.bukkit.scoreboard.ScoreboardManager;
+import org.bukkit.scoreboard.Team;
 
 import java.util.Collections;
 import java.util.EnumSet;
@@ -42,6 +45,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * and a floating TextDisplay showing dealer card value.
  */
 public class CroupierNPC {
+    private static final String PROFILE_NAME = "blackjack_npc";
+    private static final String HIDDEN_NAME_TAG_TEAM = "blackjackHideNametag";
 
     private final BlackjackPlugin plugin;
     private final BlackjackTable table;
@@ -139,7 +144,8 @@ public class CroupierNPC {
         if (!player.isOnline()) return;
         seeingPlayers.add(player.getUniqueId());
 
-        UserProfile profile = new UserProfile(npcUUID, "Krupiye");
+        ensureNameplateIsHidden();
+        UserProfile profile = new UserProfile(npcUUID, PROFILE_NAME);
         // Must include both texture AND signature — clients on 1.21.x disconnect
         // if they receive a PlayerInfoUpdate with an unsigned texture property.
         String texture = (skinTexture != null && !skinTexture.isEmpty()) ? skinTexture : CroupierSkin.DEFAULT_TEXTURE;
@@ -199,6 +205,20 @@ public class CroupierNPC {
                 }
             }, 40L);
         }, 10L);
+    }
+
+    /** Places the virtual profile name in a team whose name tags are hidden. */
+    private void ensureNameplateIsHidden() {
+        ScoreboardManager manager = Bukkit.getScoreboardManager();
+        if (manager == null) return;
+
+        Scoreboard scoreboard = manager.getMainScoreboard();
+        Team team = scoreboard.getTeam(HIDDEN_NAME_TAG_TEAM);
+        if (team == null) {
+            team = scoreboard.registerNewTeam(HIDDEN_NAME_TAG_TEAM);
+            team.setOption(Team.Option.NAME_TAG_VISIBILITY, Team.OptionStatus.NEVER);
+        }
+        team.addEntry(PROFILE_NAME);
     }
 
     /**
