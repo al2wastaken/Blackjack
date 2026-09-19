@@ -54,6 +54,7 @@ public class CroupierNPC {
     private final UUID npcUUID;
     private final Location location;
     private String skinTexture;
+    private float facingYaw;
 
     private final Set<UUID> seeingPlayers = ConcurrentHashMap.newKeySet();
     private TextDisplay scoreDisplay;
@@ -81,6 +82,7 @@ public class CroupierNPC {
         this.entityId = SpigotReflectionUtil.generateEntityId();
         this.npcUUID = UUID.randomUUID();
         this.location = location.clone();
+        this.facingYaw = location.getYaw();
         this.skinTexture = skinTexture != null ? skinTexture : CroupierSkin.CLASSIC_TUXEDO;
 
         spawnScoreDisplay();
@@ -118,6 +120,7 @@ public class CroupierNPC {
         scoreDisplay = world.spawn(displayLoc, TextDisplay.class, display -> {
             display.setBillboard(Display.Billboard.CENTER);
             display.setAlignment(TextDisplay.TextAlignment.CENTER);
+            display.setShadowed(true);
             display.setDefaultBackground(true);
             display.setSeeThrough(false);
             display.setPersistent(false);
@@ -188,11 +191,11 @@ public class CroupierNPC {
             PacketEvents.getAPI().getPlayerManager().sendPacket(player, metaPacket);
 
             // 4. Set head look & rotation
-            WrapperPlayServerEntityHeadLook headLook = new WrapperPlayServerEntityHeadLook(entityId, location.getYaw());
+            WrapperPlayServerEntityHeadLook headLook = new WrapperPlayServerEntityHeadLook(entityId, facingYaw);
             PacketEvents.getAPI().getPlayerManager().sendPacket(player, headLook);
 
             WrapperPlayServerEntityRelativeMoveAndRotation rot = new WrapperPlayServerEntityRelativeMoveAndRotation(
-                    entityId, 0, 0, 0, location.getYaw(), location.getPitch(), true
+                    entityId, 0, 0, 0, facingYaw, location.getPitch(), true
             );
             PacketEvents.getAPI().getPlayerManager().sendPacket(player, rot);
 
@@ -259,6 +262,27 @@ public class CroupierNPC {
 
     public void swingArm() {
         playArmSwing();
+    }
+
+    /** Turns the virtual croupier toward the next card recipient. */
+    public void lookAt(Location target) {
+        if (target == null || target.getWorld() == null || !target.getWorld().equals(location.getWorld())) return;
+
+        double dx = target.getX() - location.getX();
+        double dz = target.getZ() - location.getZ();
+        if (dx == 0.0 && dz == 0.0) return;
+        facingYaw = (float) Math.toDegrees(Math.atan2(-dx, dz));
+
+        WrapperPlayServerEntityHeadLook headLook = new WrapperPlayServerEntityHeadLook(entityId, facingYaw);
+        WrapperPlayServerEntityRelativeMoveAndRotation rotation = new WrapperPlayServerEntityRelativeMoveAndRotation(
+                entityId, 0, 0, 0, facingYaw, 0.0f, true);
+        for (UUID uuid : seeingPlayers) {
+            Player viewer = Bukkit.getPlayer(uuid);
+            if (viewer != null && viewer.isOnline()) {
+                PacketEvents.getAPI().getPlayerManager().sendPacket(viewer, headLook);
+                PacketEvents.getAPI().getPlayerManager().sendPacket(viewer, rotation);
+            }
+        }
     }
 
     /**

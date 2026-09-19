@@ -57,7 +57,7 @@ public class BlackjackTable {
     private static final double CARD_SURFACE_Y_OFFSET = 1.00;
     // Card displays are 0.35 blocks wide. Match that width exactly so cards
     // touch edge-to-edge without a visible gap or model overlap.
-    private static final double PLAYER_CARD_SPACING = 0.35;
+    private static final double PLAYER_CARD_SPACING = 0.30;
     private final BlackjackPlugin plugin;
     private final TableManager tableManager;
     private final ConfigManager configManager;
@@ -566,7 +566,10 @@ public class BlackjackTable {
                     cardsHaveBeenDealt = true;
                     List<Card> hand = playerHands.computeIfAbsent(player, ignored -> new ArrayList<>());
                     hand.add(deck.drawCard());
-                    if (croupierNPC != null) croupierNPC.swingArm();
+                    if (croupierNPC != null) {
+                        croupierNPC.lookAt(player.getLocation());
+                        croupierNPC.swingArm();
+                    }
                     playCardSound(player.getLocation());
                     updateCardDisplays(player, hand);
                 }
@@ -579,7 +582,10 @@ public class BlackjackTable {
             if (!gameInProgress || settlingResults) return;
             cardsHaveBeenDealt = true;
             dealerHand.add(deck.drawCard());
-            if (croupierNPC != null) croupierNPC.swingArm();
+            if (croupierNPC != null) {
+                croupierNPC.lookAt(centerLoc);
+                croupierNPC.swingArm();
+            }
             playCardSound(centerLoc);
             updateDealerDisplays();
             dealInitialCardsSequentially(dealingOrder, round + 1, 0);
@@ -591,7 +597,29 @@ public class BlackjackTable {
             return;
         }
 
-        currentPlayer = players.get(0);
+        // A natural Blackjack is final as soon as the two opening cards are
+        // dealt. Mark it complete before assigning a turn, so the player
+        // cannot hit, stand, or double down on a finished hand.
+        for (Player player : players) {
+            List<Card> hand = playerHands.get(player);
+            if (hand != null && hand.size() == 2 && gameEngine.calculateHandValue(hand) == 21) {
+                finishedPlayers.add(player);
+            }
+        }
+
+        if (finishedPlayers.size() >= players.size()) {
+            endGame();
+            return;
+        }
+
+        currentPlayer = players.stream()
+                .filter(player -> !finishedPlayers.contains(player))
+                .findFirst()
+                .orElse(null);
+        if (currentPlayer == null) {
+            endGame();
+            return;
+        }
         updateAllPlayerPrivateDisplays();
         broadcastTableMessage(configManager.formatMessage("game-started", "player", currentPlayer.getName()));
         chatUtils.sendGameActionBar(currentPlayer, true);
@@ -1326,11 +1354,12 @@ public class BlackjackTable {
         double tableY = centerLoc.getY() + CARD_SURFACE_Y_OFFSET;
         double tableZ = centerLoc.getZ();
         return switch (seatNumber) {
-            case 0 -> new Location(centerLoc.getWorld(), tableX - 1.6, tableY, tableZ + 0.8);
+            // Pull corner groups diagonally toward the upper table edge.
+            case 0 -> new Location(centerLoc.getWorld(), tableX - 1.90, tableY, tableZ + 0.55);
             case 1 -> new Location(centerLoc.getWorld(), tableX - 0.8, tableY, tableZ + 1.05);
             case 2 -> new Location(centerLoc.getWorld(), tableX + 0.0, tableY, tableZ + 1.05);
             case 3 -> new Location(centerLoc.getWorld(), tableX + 0.8, tableY, tableZ + 1.05);
-            case 4 -> new Location(centerLoc.getWorld(), tableX + 1.6, tableY, tableZ + 0.8);
+            case 4 -> new Location(centerLoc.getWorld(), tableX + 1.90, tableY, tableZ + 0.55);
             default -> new Location(centerLoc.getWorld(), tableX, tableY, tableZ + 1.05);
         };
     }
@@ -1381,6 +1410,7 @@ public class BlackjackTable {
         if (display == null || display.isDead() || !display.isValid()) {
             display = centerLoc.getWorld().spawn(textLoc, TextDisplay.class, d -> {
                 d.setBillboard(Display.Billboard.CENTER);
+                d.setShadowed(true);
                 d.setDefaultBackground(false);
                 d.setBackgroundColor(Color.fromARGB(0, 0, 0, 0));
                 d.setTransformation(new Transformation(
@@ -1442,7 +1472,7 @@ public class BlackjackTable {
         }
 
         Location baseDisplayLoc = centerLoc.clone().add(0, CARD_SURFACE_Y_OFFSET, -0.6);
-        double cardSpacing = 0.35;
+        double cardSpacing = 0.30;
         double startX = -((dealerHand.size() - 1) * cardSpacing) / 2.0;
 
         for (int i = 0; i < dealerHand.size(); i++) {
