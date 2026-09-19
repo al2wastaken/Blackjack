@@ -26,7 +26,7 @@ public class VersionChecker {
     public VersionChecker(BlackjackPlugin plugin) {
         this.plugin = plugin;
         this.currentVersion = plugin.getDescription().getVersion();
-        this.gitHubRepo = "DefectiveVortex/Blackjack";
+        this.gitHubRepo = "al2wastaken/Blackjack";
     }
     
     /**
@@ -102,13 +102,13 @@ public class VersionChecker {
                 String downloadUrl = "https://github.com/" + gitHubRepo + "/releases/latest";
                 
                 admin.sendMessage("§e╔═══════════════════════════════════════════════════════════════════════════╗");
-                admin.sendMessage("§e║ §6⚠ BLACKJACK EKLENTİ GÜNCELLEMESİ MEVCUT§e                              ║");
+                admin.sendMessage("§e║ §6⚠ BLACKJACK PLUGIN UPDATE AVAILABLE§e                                 ║");
                 admin.sendMessage("§e║                                                                           ║");
-                admin.sendMessage("§e║ §fMevcut Sürüm: §c" + currentVersion + "§e                                                  ║");
-                admin.sendMessage("§e║ §fEn Son Sürüm:  §a" + latestVersion + "§e                                                  ║");
+                admin.sendMessage("§e║ §fCurrent version: §c" + currentVersion + "§e                                                  ║");
+                admin.sendMessage("§e║ §fLatest version:  §a" + latestVersion + "§e                                                  ║");
                 admin.sendMessage("§e║                                                                           ║");
-                admin.sendMessage("§e║ §bİndir: §9" + downloadUrl + "§e     ║");
-                admin.sendMessage("§e║ §7Detaylar için §f/bj version§7 yazın§e                                    ║");
+                admin.sendMessage("§e║ §bDownload: §9" + downloadUrl + "§e     ║");
+                admin.sendMessage("§e║ §7Use §f/bj version§7 for details§e                                       ║");
                 admin.sendMessage("§e╚═══════════════════════════════════════════════════════════════════════════╝");
             }, 40L); // Delay 2 seconds after join
         }
@@ -119,18 +119,18 @@ public class VersionChecker {
      */
     public String getVersionStatus() {
         if (checkFailed) {
-            return "§cGüncelleme kontrolü yapılamadı. Lütfen internet bağlantınızı kontrol edin.";
+            return "§cCould not check for updates. Please check your internet connection.";
         }
         
         if (latestVersion == null) {
-            return "§eGüncellemeler kontrol ediliyor...";
+            return "§eChecking for updates...";
         }
         
         if (isOutdated) {
             String downloadUrl = "https://github.com/" + gitHubRepo + "/releases/latest";
-            return "§cEski sürüm! Mevcut: " + currentVersion + " | En Son: §a" + latestVersion + "§c\nİndir: §9" + downloadUrl;
+            return "§cOutdated version! Current: " + currentVersion + " | Latest: §a" + latestVersion + "§c\nDownload: §9" + downloadUrl;
         } else {
-            return "§aEklenti güncel! Mevcut sürüm: " + currentVersion;
+            return "§aPlugin is up to date! Current version: " + currentVersion;
         }
     }
     

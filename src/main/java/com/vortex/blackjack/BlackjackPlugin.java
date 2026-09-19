@@ -77,14 +77,7 @@ public class BlackjackPlugin extends JavaPlugin implements Listener {
         ConfigFileUpdater.update(this, "config.yml", new File(getDataFolder(), "config.yml"));
         reloadConfig();
         
-        File messagesFile = new File(getDataFolder(), "messages.yml");
-        FileConfiguration messagesConfig = ConfigFileUpdater.update(this, "messages.yml", messagesFile);
-
-        if (!messagesFile.exists()) {
-            getLogger().info("Creating default messages.yml file");
-            createDefaultMessagesFile(messagesFile);
-            messagesConfig = YamlConfiguration.loadConfiguration(messagesFile);
-        }
+        FileConfiguration messagesConfig = loadLanguageMessages();
         
         configManager = new ConfigManager(getConfig(), messagesConfig);
         
@@ -835,8 +828,7 @@ public class BlackjackPlugin extends JavaPlugin implements Listener {
         ConfigFileUpdater.update(this, "config.yml", new File(getDataFolder(), "config.yml"));
         reloadConfig();
         
-        File messagesFile = new File(getDataFolder(), "messages.yml");
-        FileConfiguration messagesConfig = ConfigFileUpdater.update(this, "messages.yml", messagesFile);
+        FileConfiguration messagesConfig = loadLanguageMessages();
         
         configManager.reload(getConfig(), messagesConfig);
         player.sendMessage(configManager.getMessage("config-reloaded"));
@@ -849,18 +841,32 @@ public class BlackjackPlugin extends JavaPlugin implements Listener {
             return true;
         }
 
-        player.sendMessage("§6§l=== Blackjack Eklenti Sürüm Bilgisi ===");
-        player.sendMessage("§fEklenti: §aBlackjack");
-        player.sendMessage("§fGeliştirici: §bDefectiveVortex");
-        player.sendMessage("§fMevcut Sürüm: §a" + versionChecker.getCurrentVersion());
+        player.sendMessage("§6§l=== Blackjack Plugin Version ===");
+        player.sendMessage("§fPlugin: §aBlackjack");
+        player.sendMessage("§fMaintainer: §bal2wastaken");
+        player.sendMessage("§fCurrent version: §a" + versionChecker.getCurrentVersion());
 
         if (versionChecker.getLatestVersion() != null) {
-            player.sendMessage("§fEn Son Sürüm: §a" + versionChecker.getLatestVersion());
+            player.sendMessage("§fLatest version: §a" + versionChecker.getLatestVersion());
         }
 
         player.sendMessage(versionChecker.getVersionStatus());
-        player.sendMessage("§7GitHub: §9https://github.com/DefectiveVortex/Blackjack");
+        player.sendMessage("§7GitHub: §9https://github.com/al2wastaken/Blackjack");
         return true;
+    }
+
+    private FileConfiguration loadLanguageMessages() {
+        String language = getConfig().getString("language", "en").trim().toLowerCase();
+        String resourceName = switch (language) {
+            case "tr", "turkish", "türkçe" -> "messages.yml";
+            case "en", "english" -> "messages_en.yml";
+            default -> {
+                getLogger().warning("Unsupported language '" + language + "'. Falling back to English.");
+                yield "messages_en.yml";
+            }
+        };
+
+        return ConfigFileUpdater.update(this, resourceName, new File(getDataFolder(), resourceName));
     }
     
     // Betting system - improved and thread-safe

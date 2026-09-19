@@ -7,7 +7,7 @@
 
     <groupId>com.vortex</groupId>
     <artifactId>Blackjack</artifactId>
-    <version>2.4</version>
+    <version>3.0</version>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -178,6 +178,7 @@
                     <include>plugin.yml</include>
                     <include>config.yml</include>
                     <include>messages.yml</include>
+                    <include>messages_en.yml</include>
                 </includes>
             </resource>
         </resources>

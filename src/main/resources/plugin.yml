@@ -1,7 +1,7 @@
 name: Blackjack
-version: 2.4
+version: 3.0
 main: com.vortex.blackjack.BlackjackPlugin
-description: Minecraft için fiziksel 3D masalı Blackjack (21) eklentisi
+description: Physical 3D blackjack tables for Minecraft servers
 api-version: 1.21
 depend: [packetevents, Vault]
 # PhysicalEconomy must register its Vault service before Blackjack asks Vault for it.
@@ -13,23 +13,23 @@ load: POSTWORLD
 
 commands:
   blackjack:
-    description: Blackjack eklentisi yönetici komutu
+    description: Blackjack administration command
     usage: |
-      &8[&6Blackjack&8] &rYönetici Komutları:
-      &e/bj createtable [min-bet:<n>] [max-bet:<n>] [max-players:<n>] [max-join-distance:<n>] &7- Blackjack masası oluşturur
-      &e/bj settable <ayar> <değer> &7- En yakın masanın ayarlarını değiştirir
-      &e/bj removetable &7- En yakın masayı kaldırır
-      &e/bj reload &7- Yapılandırmayı yeniden yükler
-      &e/bj version &7- Eklenti sürümünü ve durumunu kontrol eder
+      &8[&6Blackjack&8] &rAdmin Commands:
+      &e/bj createtable [min-bet:<n>] [max-bet:<n>] [max-players:<n>] [max-join-distance:<n>] &7- Create a blackjack table
+      &e/bj settable <setting> <value> &7- Update the nearest table
+      &e/bj removetable &7- Remove the nearest table
+      &e/bj reload &7- Reload configuration
+      &e/bj version &7- Show plugin version and update status
     aliases: [bj]
 
 permissions:
   blackjack.admin:
-    description: Blackjack masalarını oluşturma, silme ve yapılandırma yetkisi verir
+    description: Allows creating, removing, and configuring blackjack tables
     default: op
   blackjack.play:
-    description: Blackjack oynama yetkisi verir
+    description: Allows playing blackjack
     default: true
   blackjack.stats.others:
-    description: Diğer oyuncuların istatistiklerini kontrol etme yetkisi verir
+    description: Allows viewing other players' statistics
     default: op

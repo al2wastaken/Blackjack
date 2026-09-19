@@ -1,154 +1,49 @@
-# 🃏 Blackjack Plugin
+# Blackjack
 
-<div align="center">
+A physical, 3D blackjack-table plugin for Minecraft servers. Create tables in-world, let players sit down, place Vault-backed bets, and play standard blackjack with card displays.
 
-**A premium physical blackjack table plugin for Minecraft servers**
+## Version 3.0
 
-*Create interactive card tables in your game world with realistic 3D card displays*
+- English is now the default language.
+- Turkish is available through the plugin configuration.
+- Vault economy integration, player statistics, quick bets, double down, configurable tables, and PlaceholderAPI support are included.
 
-</div>
+## Installation
 
-## ✨ Features
+1. Download `Blackjack-3.0.jar` from the latest GitHub release.
+2. Install [Vault](https://www.spigotmc.org/resources/vault.34315/) and a Vault-compatible economy plugin.
+3. Put the JAR in your server's `plugins` folder and restart the server.
+4. Configure `plugins/Blackjack/config.yml` as needed.
 
-### 🎮 **Immersive Gameplay**
-- **Physical Card Tables**: Place interactive blackjack tables anywhere in your world
-- **3D Card Displays**: Realistic card animations with custom resource pack support
-- **Multi-Player Support**: Up to 4 players per table with seamless turn management
-- **Smart Game Logic**: Professional blackjack rules with dealer AI
+Requires Java 21 and a Minecraft 1.21-compatible Paper, Spigot, or compatible server.
 
-### 💰 **Economy Integration**
-- **Vault Compatible**: Works with any Vault-supported economy plugin (EssentialsX, EconomyAPI, CMI, etc.)
-- **Flexible Betting**: Configurable bet limits and cooldown periods
-- **Secure Transactions**: Anti-cheat measures and bet validation
+## Language
 
-### 📊 **Player Statistics**
-- **Comprehensive Tracking**: Wins, losses, pushes, and streaks
-- **Performance Metrics**: Track your best winning streaks and total earnings
-- **Persistent Data**: Statistics saved across server restarts
+English is the default. To use Turkish, set this in `plugins/Blackjack/config.yml`, then run `/bj reload` or restart the server:
 
-### 🎨 **Visual & Audio**
-- **Colorized Chat**: Suit-based card colors (Red ♥♦, Dark Gray ♠♣)
-- **Particle Effects**: Customizable win/lose particle displays
-- **Sound Effects**: Immersive audio feedback for game events
-- **Compact Interface**: Clean, spam-free chat with essential information
-
-## 🚀 Quick Start
-
-### Installation
-1. **Download** the latest `Blackjack.jar` from releases
-2. **Install Vault** and a **Vault-compatible economy plugin** before starting the server
-3. **Place** the jar in your server's `plugins` folder
-4. **Install** the required `@playing_cards` resource pack
-5. **Restart** your server
-6. **Configure** settings in `config.yml` (optional)
-
-### Basic Usage
-```bash
-# Create a table (Admin)
-/bj createtable
-
-# Join and play
-/bj join          # Join nearest table
-/bj bet 100       # Place your bet
-/bj start         # Start the game
-/bj hit           # Take another card
-/bj stand         # End your turn
-/bj stats         # View your statistics
+```yaml
+language: tr
 ```
 
-## 🎯 Commands & Permissions
+Supported values are `en` and `tr`.
+
+## Commands
 
 | Command | Description | Permission |
-|---------|-------------|------------|
-| `/bj createtable` | Create a new blackjack table | `blackjack.admin` |
+| --- | --- | --- |
+| `/bj createtable` | Create a table | `blackjack.admin` |
 | `/bj removetable` | Remove the nearest table | `blackjack.admin` |
-| `/bj join` | Join the nearest table | `blackjack.play` |
-| `/bj leave` | Leave your current table | `blackjack.play` |
-| `/bj bet <amount>` | Place or change your bet | `blackjack.play` |
-| `/bj hit` / `/bj stand` | Game actions | `blackjack.play` |
-| `/bj stats [player]` | View statistics | `blackjack.play` |
+| `/bj settable <setting> <value>` | Configure the nearest table | `blackjack.admin` |
+| `/bj reload` | Reload configuration | `blackjack.admin` |
+| `/bj join`, `/bj leave` | Join or leave a table | `blackjack.play` |
+| `/bj bet <amount>` | Place or update a bet | `blackjack.play` |
+| `/bj start`, `/bj hit`, `/bj stand`, `/bj doubledown` | Play blackjack | `blackjack.play` |
+| `/bj stats [player]` | View player statistics | `blackjack.play` |
 
-## 🔌 PlaceholderAPI Integration
+## Credits
 
-Blackjack includes **40+ PlaceholderAPI placeholders** for extensive integration with other plugins:
+This project was forked from [DefectiveVortex/Blackjack](https://github.com/DefectiveVortex/Blackjack) and was inspired by [aematsubara/Roulette](https://github.com/aematsubara/Roulette).
 
-- **Player Statistics**: `%blackjack_stats_*%` (wins, losses, win rate, winnings, streaks)
-- **Table Information**: `%blackjack_table_*%` (players, status, location)  
-- **Game State**: `%blackjack_game_*%` (hand value, turn status, dealer info)
-- **Betting**: `%blackjack_bet_*%` (current bets, limits, persistent bets)
-- **Economy**: `%blackjack_economy_*%` (balance, affordability checks)
+## License
 
-📖 **[View Complete PlaceholderAPI Documentation](https://github.com/DefectiveVortex/Blackjack/blob/main/PLACEHOLDERAPI.md)**
-
-### Quick Examples:
-```yaml
-# Scoreboard integration
-- "&fWin Rate: &b%blackjack_stats_win_rate%%"
-- "&fAt Table: %blackjack_table_at_table%"
-- "&fCurrent Bet: &6%blackjack_bet_current_formatted%"
-```
-
-## 🔌 Plugin Integration
-
-### Economy & Features
-- **Vault Compatible**: Works with any Vault-supported economy plugin
-- **GSit Support**: Auto-sit at tables when GSit is installed
-- **Version Checking**: Automatic update notifications for admins
-
-## ⚙️ Configuration
-
-Customize your blackjack experience:
-
-```yaml
-# Betting & Game Settings
-betting:
-  min-bet: 10
-  max-bet: 10000
-  cooldown-ms: 2000
-
-table:
-  max-players: 4
-  max-join-distance: 10.0
-
-# Audio & Visual Effects
-sounds:
-  enabled: true
-particles:
-  enabled: true
-```
-
-## 🎲 Game Features
-
-- **🃏 3D Card Displays**: Realistic card animations with custom resource pack
-- **🎯 Professional Rules**: Standard blackjack with configurable dealer behavior
-- **🏆 Smart Payouts**: Blackjack 3:2, Regular wins 2:1, automatic economy integration
-- **� Statistics**: Track wins, losses, streaks, and total winnings
-
-## 🔧 Requirements
-
-- **Minecraft Version**: 1.20 or higher
-- **Server Software**: Spigot, Paper, or compatible forks
-- **Java Version**: 21 or higher
-- **Dependencies**: Vault + any economy plugin (EssentialsX, EconomyAPI, CMI, etc.)
-- **Resource Pack**: [@playing_cards](https://modrinth.com/resourcepack/bjplayingcards)
-
-## 🤝 Contributing
-
-We welcome contributions! Please feel free to:
-- Report bugs via GitHub Issues
-- Suggest new features
-- Submit pull requests
-- Improve documentation
-
-## 📞 Support
-
-Need help? Reach out to us:
-
-- **Discord**: `@vortexunwanted`
-- **GitHub Issues**: [Report bugs/requests](https://github.com/DefectiveVortex/Blackjack/issues)
-
-## 📄 License
-
-This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
-
----
+This project is licensed under the [MIT License](LICENSE).

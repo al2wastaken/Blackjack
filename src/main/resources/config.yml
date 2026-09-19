@@ -2,6 +2,10 @@
 # Blackjack Plugin Configuration
 # ==============================================================================
 
+# Language for player-facing messages. Supported values: en (default), tr.
+# Run /bj reload after changing this value.
+language: en
+
 # Database Configuration (HikariCP Connection Pool)
 # Supports SQLite (local file) and MySQL (remote or local database)
 database:
