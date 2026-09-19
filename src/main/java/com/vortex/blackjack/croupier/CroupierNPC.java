@@ -140,18 +140,20 @@ public class CroupierNPC {
         seeingPlayers.add(player.getUniqueId());
 
         UserProfile profile = new UserProfile(npcUUID, ChatColor.GOLD + "Krupiye");
-        if (skinTexture != null && !skinTexture.isEmpty()) {
-            profile.setTextureProperties(List.of(new TextureProperty("textures", skinTexture, null)));
-        }
+        // Must include both texture AND signature — clients on 1.21.x disconnect
+        // if they receive a PlayerInfoUpdate with an unsigned texture property.
+        String texture = (skinTexture != null && !skinTexture.isEmpty()) ? skinTexture : CroupierSkin.DEFAULT_TEXTURE;
+        String signature = CroupierSkin.getSignatureForTexture(texture);
+        profile.setTextureProperties(List.of(new TextureProperty("textures", texture, signature)));
 
-        // 1. Add to Player Info (Tab list)
+        // 1. Add to Player Info (Tab list) — GameMode.CREATIVE matches Roulette
         WrapperPlayServerPlayerInfoUpdate.PlayerInfo info = new WrapperPlayServerPlayerInfoUpdate.PlayerInfo(
-                profile, false, 20, GameMode.SURVIVAL, null, null
+                profile, false, 20, GameMode.CREATIVE, null, null
         );
         WrapperPlayServerPlayerInfoUpdate addPacket = new WrapperPlayServerPlayerInfoUpdate(ADD_ACTIONS, info);
         PacketEvents.getAPI().getPlayerManager().sendPacket(player, addPacket);
 
-        // 2. Spawn entity after 5 ticks so skin data is recognized
+        // 2. Spawn entity after 10 ticks so skin data is recognized (matching Roulette timing)
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
             if (!player.isOnline() || !seeingPlayers.contains(player.getUniqueId())) return;
 
@@ -170,7 +172,9 @@ public class CroupierNPC {
             PacketEvents.getAPI().getPlayerManager().sendPacket(player, spawnPacket);
 
             // 3. Set metadata (skin layers: hat, jacket, sleeves, pants)
-            int skinLayerIndex = 17;
+            // Index 16 for 1.21.9+, 17 for older versions (matching Roulette's MetadataModifier)
+            ServerVersion serverVersion = PacketEvents.getAPI().getServerManager().getVersion();
+            int skinLayerIndex = serverVersion.isNewerThanOrEquals(ServerVersion.V_1_21_2) ? 16 : 17;
             List<EntityData<?>> metadataList = List.of(
                     new EntityData<>(skinLayerIndex, EntityDataTypes.BYTE, ALL_SKIN_LAYERS)
             );
@@ -194,7 +198,7 @@ public class CroupierNPC {
                     PacketEvents.getAPI().getPlayerManager().sendPacket(player, removePacket);
                 }
             }, 40L);
-        }, 5L);
+        }, 10L);
     }
 
     /**

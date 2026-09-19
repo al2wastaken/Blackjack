@@ -423,6 +423,7 @@ public class BlackjackPlugin extends JavaPlugin implements Listener {
         if (configManager.isStatsTrackerEnabled() && databaseManager != null) {
             getServer().getScheduler().runTaskAsynchronously(this, () -> {
                 PlayerStats stats = databaseManager.loadPlayerStats(player.getUniqueId());
+                if (stats == null) stats = new PlayerStats();
                 playerStats.put(player.getUniqueId(), stats);
             });
         }
