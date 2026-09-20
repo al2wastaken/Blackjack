@@ -33,9 +33,9 @@ final class TableSurfaceGeometry {
                         cut, thickness, halfDepth * 2 - cut, 0),
                 box((halfWidth + frontHalfWidth) / 2, y, -cut / 2,
                         cut, thickness, halfDepth * 2 - cut, 0),
-                box(-frontHalfWidth, y, shoulderZ, diamondSide, thickness - 0.001f,
+                box(-frontHalfWidth, y, shoulderZ, diamondSide, thickness - 0.0002f,
                         diamondSide, (float) Math.PI / 4),
-                box(frontHalfWidth, y, shoulderZ, diamondSide, thickness - 0.001f,
+                box(frontHalfWidth, y, shoulderZ, diamondSide, thickness - 0.0002f,
                         diamondSide, (float) Math.PI / 4)
         );
     }
