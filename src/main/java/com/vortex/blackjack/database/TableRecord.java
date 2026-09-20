@@ -27,7 +27,7 @@ public class TableRecord {
 
     public TableRecord(String id, String world, double x, double y, double z, float yaw, float pitch,
                        Integer minBet, Integer maxBet, Integer maxPlayers, Double maxJoinDistance) {
-        this(id, world, x, y, z, yaw, pitch, minBet, maxBet, maxPlayers, maxJoinDistance, "classic", 15, "GREEN_WOOL");
+        this(id, world, x, y, z, yaw, pitch, minBet, maxBet, maxPlayers, maxJoinDistance, "classic", 15, "GREEN_CONCRETE");
     }
 
     public TableRecord(String id, String world, double x, double y, double z, float yaw, float pitch,
@@ -90,7 +90,8 @@ public class TableRecord {
         s.setCountdownSeconds(countdownSeconds);
         if (feltColor != null) {
             try {
-                s.setFeltMaterial(org.bukkit.Material.valueOf(feltColor));
+                String matName = feltColor.replace("_WOOL", "_CONCRETE");
+                s.setFeltMaterial(org.bukkit.Material.valueOf(matName));
             } catch (Exception ignored) {}
         }
         return s;

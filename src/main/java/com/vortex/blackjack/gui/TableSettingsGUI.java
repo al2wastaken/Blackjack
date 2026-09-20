@@ -33,13 +33,13 @@ public class TableSettingsGUI implements InventoryHolder {
     private static final String[] PRESET_SKIN_KEYS = {"classic", "lady", "mafia", "casual"};
     private static final int[] COUNTDOWN_OPTIONS = {5, 10, 15, 20, 30};
     private static final Material[] FELT_MATERIALS = {
-            Material.GREEN_WOOL,
-            Material.RED_WOOL,
-            Material.BLUE_WOOL,
-            Material.BLACK_WOOL,
-            Material.PURPLE_WOOL,
-            Material.LIME_WOOL,
-            Material.CYAN_WOOL
+            Material.GREEN_CONCRETE,
+            Material.RED_CONCRETE,
+            Material.BLUE_CONCRETE,
+            Material.BLACK_CONCRETE,
+            Material.PURPLE_CONCRETE,
+            Material.LIME_CONCRETE,
+            Material.CYAN_CONCRETE
     };
 
     public TableSettingsGUI(BlackjackPlugin plugin, BlackjackTable table, Player player) {

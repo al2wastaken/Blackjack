@@ -134,9 +134,9 @@ public class ConfigManager {
 
     public Material getFeltMaterial() {
         try {
-            return Material.valueOf(feltColor + "_WOOL");
+            return Material.valueOf(feltColor + "_CONCRETE");
         } catch (IllegalArgumentException e) {
-            return Material.GREEN_WOOL;
+            return Material.GREEN_CONCRETE;
         }
     }
 
@@ -401,7 +401,7 @@ public class ConfigManager {
 
     public String getFeltDisplayName(Material mat) {
         if (mat == null) return "Green";
-        String name = mat.name().replace("_WOOL", "").toLowerCase();
+        String name = mat.name().replace("_CONCRETE", "").replace("_WOOL", "").toLowerCase();
         String path = "table-settings-gui.felts." + name;
         if (hasMessage(path)) {
             return getMessage(path);

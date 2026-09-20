@@ -69,7 +69,15 @@ public class TableSettings {
     }
 
     public org.bukkit.Material getFeltMaterial() {
-        return feltMaterial != null ? feltMaterial : org.bukkit.Material.GREEN_WOOL;
+        if (feltMaterial != null) {
+            if (feltMaterial.name().endsWith("_WOOL")) {
+                try {
+                    return org.bukkit.Material.valueOf(feltMaterial.name().replace("_WOOL", "_CONCRETE"));
+                } catch (IllegalArgumentException ignored) {}
+            }
+            return feltMaterial;
+        }
+        return org.bukkit.Material.GREEN_CONCRETE;
     }
 
     // -------------------------------------------------------------------------
