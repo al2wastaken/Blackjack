@@ -121,6 +121,10 @@ public class BettingGUI implements InventoryHolder {
     }
 
     public void open() {
+        if (table.isBettingLocked() || table.isGameInProgress() || table.hasCardsBeenDealt()) {
+            player.sendMessage(configManager.getMessage("betting-gui.messages.game-in-progress"));
+            return;
+        }
         player.openInventory(inventory);
     }
 
@@ -128,7 +132,7 @@ public class BettingGUI implements InventoryHolder {
         event.setCancelled(true);
         int slot = event.getRawSlot();
 
-        if (table.isGameInProgress()) {
+        if (table.isBettingLocked() || table.isGameInProgress() || table.hasCardsBeenDealt()) {
             player.sendMessage(configManager.getMessage("betting-gui.messages.game-in-progress"));
             player.closeInventory();
             return;
@@ -158,6 +162,12 @@ public class BettingGUI implements InventoryHolder {
     }
 
     public void applyBet(int amount) {
+        if (table.isBettingLocked() || table.isGameInProgress() || table.hasCardsBeenDealt()) {
+            player.sendMessage(configManager.getMessage("betting-gui.messages.game-in-progress"));
+            player.closeInventory();
+            return;
+        }
+
         int minBet = table.getSettings().getMinBet(configManager);
         int maxBet = table.getSettings().getMaxBet(configManager);
 

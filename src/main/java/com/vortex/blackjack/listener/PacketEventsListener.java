@@ -86,8 +86,8 @@ public class PacketEventsListener extends PacketListenerAbstract {
             if (table == null) return;
 
             // During an active turn, Space is the dedicated Double Down input.
-            if (table.isGameInProgress()) {
-                if (table.isPlayerTurn(player)) {
+            if (table.isBettingLocked() || table.hasCardsBeenDealt() || table.isGameInProgress()) {
+                if (table.isGameInProgress() && table.isPlayerTurn(player)) {
                     table.doubleDown(player);
                 }
                 return;

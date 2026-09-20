@@ -7,6 +7,7 @@ import com.vortex.blackjack.croupier.CroupierNPC;
 import com.vortex.blackjack.croupier.CroupierSkin;
 import com.vortex.blackjack.game.BlackjackEngine;
 import com.vortex.blackjack.gui.BettingGUI;
+import com.vortex.blackjack.gui.SignGUI;
 import com.vortex.blackjack.model.Card;
 import com.vortex.blackjack.model.Deck;
 import com.vortex.blackjack.util.ChatUtils;
@@ -402,6 +403,12 @@ public class BlackjackTable {
             }
             
             // Cleanup player data
+            if (player.isOnline()) {
+                if (player.getOpenInventory().getTopInventory().getHolder() instanceof BettingGUI) {
+                    player.closeInventory();
+                }
+                SignGUI.clear(player);
+            }
             players.remove(player);
             removeTurnBossBar(player);
             if (!gameInProgress && !settlingResults) {
@@ -531,6 +538,7 @@ public class BlackjackTable {
             finishedPlayers.clear();
             doubleDownPlayers.clear();
             roundBets.clear();
+            closeBettingGUIsForAllPlayers();
             
             // Prepare empty hands. The initial cards are then dealt one by one
             // so every card has a matching croupier animation and sound.
@@ -564,6 +572,7 @@ public class BlackjackTable {
                 if (!gameInProgress || settlingResults) return;
                 if (players.contains(player)) {
                     cardsHaveBeenDealt = true;
+                    closeBettingGUIsForAllPlayers();
                     List<Card> hand = playerHands.computeIfAbsent(player, ignored -> new ArrayList<>());
                     hand.add(deck.drawCard());
                     if (croupierNPC != null) {
@@ -581,6 +590,7 @@ public class BlackjackTable {
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
             if (!gameInProgress || settlingResults) return;
             cardsHaveBeenDealt = true;
+            closeBettingGUIsForAllPlayers();
             dealerHand.add(deck.drawCard());
             if (croupierNPC != null) {
                 croupierNPC.lookAt(centerLoc);
@@ -953,10 +963,29 @@ public class BlackjackTable {
                     if (!gameInProgress && !settlingResults && !players.isEmpty() && countdownTask == null) {
                         for (Player p : players) {
                             p.sendMessage(configManager.getMessage("table-events.round-preparing-hint"));
+                            if (p.isOnline() && players.contains(p)) {
+                                new BettingGUI(plugin, this, p).open();
+                            }
                         }
                         startCountdown();
                     }
                 }, 60L);
+            }
+        }
+    }
+
+    /**
+     * Closes the betting GUI and cancels sign editor sessions for all seated players.
+     * Prevents players from modifying bets after cards begin dealing or game starts.
+     */
+    public void closeBettingGUIsForAllPlayers() {
+        for (Player p : players) {
+            if (p != null && p.isOnline()) {
+                if (p.getOpenInventory().getTopInventory().getHolder() instanceof BettingGUI) {
+                    p.closeInventory();
+                    p.sendMessage(configManager.getMessage("betting-gui.messages.game-in-progress"));
+                }
+                SignGUI.clear(p);
             }
         }
     }
@@ -1559,7 +1588,9 @@ public class BlackjackTable {
     public Location getCenterLocation() { return centerLoc; }
     public List<Player> getPlayers() { return new ArrayList<>(players); }
     public boolean isGameInProgress() { return gameInProgress; }
-    public boolean isBettingLocked() { return gameInProgress || settlingResults; }
+    public boolean isBettingLocked() { return gameInProgress || settlingResults || cardsHaveBeenDealt; }
+    public boolean hasCardsBeenDealt() { return cardsHaveBeenDealt; }
+    public boolean isSettlingResults() { return settlingResults; }
     
     // PlaceholderAPI support methods
     public int getPlayerCount() { return players.size(); }
