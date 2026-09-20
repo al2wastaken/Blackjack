@@ -134,9 +134,9 @@ public class ConfigManager {
 
     public Material getFeltMaterial() {
         try {
-            return Material.valueOf(feltColor + "_CONCRETE");
+            return Material.valueOf(feltColor + "_WOOL");
         } catch (IllegalArgumentException e) {
-            return Material.GREEN_CONCRETE;
+            return Material.GREEN_WOOL;
         }
     }
 

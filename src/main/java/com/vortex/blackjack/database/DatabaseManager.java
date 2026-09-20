@@ -138,7 +138,7 @@ public class DatabaseManager {
                             "max_join_distance DOUBLE, " +
                             "croupier_skin VARCHAR(255) DEFAULT 'classic', " +
                             "countdown_seconds INT DEFAULT 15, " +
-                            "felt_color VARCHAR(32) DEFAULT 'GREEN_CONCRETE', " +
+                            "felt_color VARCHAR(32) DEFAULT 'GREEN_WOOL', " +
                             "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP" +
                             ");"
             );
@@ -151,7 +151,7 @@ public class DatabaseManager {
                 stmt.executeUpdate("ALTER TABLE blackjack_tables ADD COLUMN countdown_seconds INT DEFAULT 15");
             } catch (SQLException ignored) {}
             try {
-                stmt.executeUpdate("ALTER TABLE blackjack_tables ADD COLUMN felt_color VARCHAR(32) DEFAULT 'GREEN_CONCRETE'");
+                stmt.executeUpdate("ALTER TABLE blackjack_tables ADD COLUMN felt_color VARCHAR(32) DEFAULT 'GREEN_WOOL'");
             } catch (SQLException ignored) {}
 
             // Player stats schema
@@ -205,7 +205,7 @@ public class DatabaseManager {
                 result.add(new TableRecord(id, world, x, y, z, yaw, pitch, minBet, maxBet, maxPlayers, maxDist,
                         croupierSkin != null ? croupierSkin : "classic",
                         countdown != null ? countdown : 15,
-                        feltColor != null ? feltColor : "GREEN_CONCRETE"));
+                        feltColor != null ? feltColor : "GREEN_WOOL"));
             }
         } catch (SQLException e) {
             plugin.getLogger().log(Level.SEVERE, "Error loading tables from database", e);

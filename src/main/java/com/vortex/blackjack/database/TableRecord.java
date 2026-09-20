@@ -27,12 +27,12 @@ public class TableRecord {
 
     public TableRecord(String id, String world, double x, double y, double z, float yaw, float pitch,
                        Integer minBet, Integer maxBet, Integer maxPlayers, Double maxJoinDistance) {
-        this(id, world, x, y, z, yaw, pitch, minBet, maxBet, maxPlayers, maxJoinDistance, "classic", 15, "GREEN_CONCRETE");
+        this(id, world, x, y, z, yaw, pitch, minBet, maxBet, maxPlayers, maxJoinDistance, "classic", 15, "GREEN_WOOL");
     }
 
     public TableRecord(String id, String world, double x, double y, double z, float yaw, float pitch,
                        Integer minBet, Integer maxBet, Integer maxPlayers, Double maxJoinDistance,
-                       String croupierSkin, Integer countdownSeconds, String feltColor) {
+                       String croupierSkin, int countdownSeconds, String feltColor) {
         this.id = id;
         this.world = world;
         this.x = x;
@@ -44,9 +44,9 @@ public class TableRecord {
         this.maxBet = maxBet;
         this.maxPlayers = maxPlayers;
         this.maxJoinDistance = maxJoinDistance;
-        this.croupierSkin = croupierSkin;
-        this.countdownSeconds = countdownSeconds;
-        this.feltColor = feltColor;
+        this.croupierSkin = croupierSkin != null ? croupierSkin : "classic";
+        this.countdownSeconds = countdownSeconds > 0 ? countdownSeconds : 15;
+        this.feltColor = feltColor != null ? feltColor : "GREEN_WOOL";
     }
 
     public static TableRecord fromLocationAndSettings(Location loc, TableSettings settings) {
@@ -90,7 +90,7 @@ public class TableRecord {
         s.setCountdownSeconds(countdownSeconds);
         if (feltColor != null) {
             try {
-                String matName = feltColor.replace("_WOOL", "_CONCRETE");
+                String matName = feltColor.replace("_CONCRETE", "_WOOL");
                 s.setFeltMaterial(org.bukkit.Material.valueOf(matName));
             } catch (Exception ignored) {}
         }
