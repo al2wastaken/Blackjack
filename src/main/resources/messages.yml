@@ -445,5 +445,5 @@ settings-validation:
   unknown-setting: "Bilinmeyen ayar '%key%'. Geçerli ayarlar: min-bet, max-bet, max-players, max-join-distance"
   invalid-value: "Geçersiz değer '%key%': %val%"
   min-greater-max: "min-bet (%min%), max-bet (%max%) değerinden büyük olamaz"
-  players-range: "max-players 1 ile 8 arasında olmalıdır"
+  players-range: "max-players 1 ile 4 arasında olmalıdır"
   min-distance: "max-join-distance en az 1 olmalıdır"

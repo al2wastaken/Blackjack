@@ -61,7 +61,7 @@ public class ConfigManager {
         
         // Table settings
         maxJoinDistance = Math.max(1.0, config.getDouble("table.max-join-distance", 10.0));
-        maxPlayers = Math.max(1, Math.min(8, config.getInt("table.max-players", 4)));
+        maxPlayers = Math.max(1, Math.min(4, config.getInt("table.max-players", 4)));
         
         // Materials with fallbacks
         try {

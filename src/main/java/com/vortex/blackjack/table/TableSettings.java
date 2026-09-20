@@ -107,7 +107,7 @@ public class TableSettings {
         int lo = getMinBet(cfg);
         int hi = getMaxBet(cfg);
         if (lo > hi) return cfg.formatMessage("settings-validation.min-greater-max", "min", lo, "max", hi);
-        if (maxPlayers != null && (maxPlayers < 1 || maxPlayers > 8))
+        if (maxPlayers != null && (maxPlayers < 1 || maxPlayers > 4))
             return cfg.getMessage("settings-validation.players-range");
         if (maxJoinDistance != null && maxJoinDistance < 1.0)
             return cfg.getMessage("settings-validation.min-distance");

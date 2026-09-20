@@ -48,7 +48,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Represents a single blackjack table with game logic, 5x3 physical table model,
- * PacketEvents Player-NPC Croupier, private hand TextDisplays, and 5-chair layout.
+ * PacketEvents Player-NPC Croupier, private hand TextDisplays, and 4-chair layout.
  */
 public class BlackjackTable {
     // The felt is a BlockDisplay beginning at Y=0.75 with 0.15 blocks of height
@@ -128,7 +128,7 @@ public class BlackjackTable {
         this.tableModel = new BlackjackTableModel(plugin, this, this.centerLoc);
         this.tableModel.spawn(configManager.getWoodPlanks(), configManager.getWoodSlab(), felt != null ? felt : configManager.getFeltMaterial());
 
-        // 2. Initialize 5 physical chairs matching the user's casino blueprint
+        // 2. Initialize 4 physical chairs matching the user's casino blueprint
         initChairs();
 
         // 3. Initialize PacketEvents Croupier NPC at (x=0, z=-1.8, yaw=0)
@@ -158,7 +158,7 @@ public class BlackjackTable {
     }
 
     /**
-     * Initializes the 5 physical chairs matching the 5x3 chamfered casino blueprint.
+     * Initializes the 4 physical chairs matching the 5x3 chamfered casino blueprint.
      */
     public void initChairs() {
         for (BlackjackChair chair : chairs) {
@@ -170,17 +170,15 @@ public class BlackjackTable {
         double tableY = centerLoc.getY();
         double tableZ = centerLoc.getZ();
 
-        // 5 Chairs matching the 5x3 chamfered casino layout:
+        // 4 Chairs matching the 5x3 chamfered casino layout:
         // Seat 0: Left Angled corner (x=-2.3, z=1.4, yaw=135°)
         chairs.add(new BlackjackChair(plugin, this, 0, new Location(centerLoc.getWorld(), tableX - 2.3, tableY, tableZ + 1.4), 135.0f));
-        // Seat 1: Front Left (x=-1.2, z=2.0, yaw=180°)
-        chairs.add(new BlackjackChair(plugin, this, 1, new Location(centerLoc.getWorld(), tableX - 1.2, tableY, tableZ + 2.0), 180.0f));
-        // Seat 2: Front Center (x=0.0, z=2.0, yaw=180°)
-        chairs.add(new BlackjackChair(plugin, this, 2, new Location(centerLoc.getWorld(), tableX + 0.0, tableY, tableZ + 2.0), 180.0f));
-        // Seat 3: Front Right (x=1.2, z=2.0, yaw=180°)
-        chairs.add(new BlackjackChair(plugin, this, 3, new Location(centerLoc.getWorld(), tableX + 1.2, tableY, tableZ + 2.0), 180.0f));
-        // Seat 4: Right Angled corner (x=2.3, z=1.4, yaw=225°)
-        chairs.add(new BlackjackChair(plugin, this, 4, new Location(centerLoc.getWorld(), tableX + 2.3, tableY, tableZ + 1.4), 225.0f));
+        // Seat 1: Front Left (x=-0.8, z=2.0, yaw=180°) - matches card pivot X (-0.8)
+        chairs.add(new BlackjackChair(plugin, this, 1, new Location(centerLoc.getWorld(), tableX - 0.8, tableY, tableZ + 2.0), 180.0f));
+        // Seat 2: Front Right (x=0.8, z=2.0, yaw=180°) - matches card pivot X (+0.8)
+        chairs.add(new BlackjackChair(plugin, this, 2, new Location(centerLoc.getWorld(), tableX + 0.8, tableY, tableZ + 2.0), 180.0f));
+        // Seat 3: Right Angled corner (x=2.3, z=1.4, yaw=225°)
+        chairs.add(new BlackjackChair(plugin, this, 3, new Location(centerLoc.getWorld(), tableX + 2.3, tableY, tableZ + 1.4), 225.0f));
 
         for (BlackjackChair chair : chairs) {
             chair.spawn(configManager.getWoodPlanks(), configManager.getWoodSlab(), configManager.getChairCushionMaterial());
@@ -286,7 +284,7 @@ public class BlackjackTable {
                 return false;
             }
             
-            if (players.size() >= 5) {
+            if (players.size() >= 4) {
                 player.sendMessage(configManager.getMessage("table-full"));
                 return false;
             }
@@ -1008,7 +1006,7 @@ public class BlackjackTable {
 
     private void updateCroupierIdleDisplay() {
         if (croupierNPC == null) return;
-        int capacity = chairs.isEmpty() ? 5 : chairs.size();
+        int capacity = chairs.isEmpty() ? 4 : chairs.size();
         List<String> rules = configManager.getHologramRules(players.size(), capacity);
         croupierNPC.updateScoreDisplay(String.join("\n", rules.get(0), rules.get(1), rules.get(2), "", rules.get(3)));
     }
@@ -1186,8 +1184,8 @@ public class BlackjackTable {
             // Corner players face the table from the opposite direction, so
             // their cards need the diagonal angle plus 180 degrees.
             case 0 -> (float) Math.toRadians(225.0);
-            case 1, 2, 3 -> (float) Math.PI;
-            case 4 -> (float) Math.toRadians(135.0);
+            case 1, 2 -> (float) Math.PI;
+            case 3 -> (float) Math.toRadians(135.0);
             default -> (float) Math.PI;
         };
     }
@@ -1383,9 +1381,8 @@ public class BlackjackTable {
             // Pull corner groups diagonally toward the upper table edge.
             case 0 -> new Location(centerLoc.getWorld(), tableX - 1.90, tableY, tableZ + 0.55);
             case 1 -> new Location(centerLoc.getWorld(), tableX - 0.8, tableY, tableZ + 1.05);
-            case 2 -> new Location(centerLoc.getWorld(), tableX + 0.0, tableY, tableZ + 1.05);
-            case 3 -> new Location(centerLoc.getWorld(), tableX + 0.8, tableY, tableZ + 1.05);
-            case 4 -> new Location(centerLoc.getWorld(), tableX + 1.90, tableY, tableZ + 0.55);
+            case 2 -> new Location(centerLoc.getWorld(), tableX + 0.8, tableY, tableZ + 1.05);
+            case 3 -> new Location(centerLoc.getWorld(), tableX + 1.90, tableY, tableZ + 0.55);
             default -> new Location(centerLoc.getWorld(), tableX, tableY, tableZ + 1.05);
         };
     }

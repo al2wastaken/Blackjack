@@ -588,7 +588,7 @@ public class BlackjackPlugin extends JavaPlugin implements Listener {
             switch (setting) {
                 case "min-bet"            -> s.setMinBet(parsePositiveInt(value));
                 case "max-bet"            -> s.setMaxBet(parsePositiveInt(value));
-                case "max-players"        -> s.setMaxPlayers(Math.max(1, Math.min(8, parsePositiveInt(value))));
+                case "max-players"        -> s.setMaxPlayers(Math.max(1, Math.min(4, parsePositiveInt(value))));
                 case "max-join-distance"  -> s.setMaxJoinDistance(parsePositiveDouble(value));
                 default -> {
                     player.sendMessage(configManager.formatMessage("settable-unknown-setting", "setting", setting));
