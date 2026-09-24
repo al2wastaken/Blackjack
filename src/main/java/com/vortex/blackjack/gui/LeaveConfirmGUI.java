@@ -160,6 +160,7 @@ public class LeaveConfirmGUI implements InventoryHolder {
         BlackjackChair chair = table.getChairForPlayer(player);
         if (chair != null && !chair.isOccupied()) {
             chair.sit(player);
+            table.hideTableTextDisplay(player);
         }
 
         player.sendMessage(configManager.formatMessage("confirm-leave-gui.stay-message", "amount", betAmount));

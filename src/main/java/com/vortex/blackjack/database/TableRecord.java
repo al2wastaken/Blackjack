@@ -62,7 +62,7 @@ public class TableRecord {
                 bx + 0.5,
                 by,
                 bz + 0.5,
-                180.0f,
+                loc.getYaw(),
                 0.0f,
                 settings.getRawMinBet(),
                 settings.getRawMaxBet(),

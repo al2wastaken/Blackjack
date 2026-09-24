@@ -4,6 +4,7 @@ import com.vortex.blackjack.BlackjackPlugin;
 import com.vortex.blackjack.chair.BlackjackChair;
 import com.vortex.blackjack.table.BlackjackTable;
 import com.vortex.blackjack.table.TableManager;
+import org.bukkit.Location;
 import org.bukkit.entity.ArmorStand;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
@@ -244,10 +245,29 @@ public class TableInteractListener implements Listener {
         Player player = event.getPlayer();
         BlackjackTable table = tableManager.getPlayerTable(player);
         if (table != null) {
-            // If the teleport destination is far from the table, remove them
-            if (event.getTo() != null && event.getTo().distance(table.getCenterLocation()) > table.getSettings().getMaxJoinDistance(plugin.getConfigManager())) {
-                table.removePlayer(player, plugin.getConfigManager().getLeaveReason("teleported"));
+            Location to = event.getTo();
+            // If the teleport destination is in another world or far from the table, remove them
+            if (to != null) {
+                if (to.getWorld() == null ||
+                        !to.getWorld().equals(table.getCenterLocation().getWorld()) ||
+                        to.distance(table.getCenterLocation()) > table.getSettings().getMaxJoinDistance(plugin.getConfigManager())) {
+                    table.removePlayer(player, plugin.getConfigManager().getLeaveReason("teleported"));
+                }
             }
+        }
+
+        Location to = event.getTo();
+        if (to != null && to.getWorld() != null) {
+            plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
+                if (!player.isOnline()) return;
+                for (BlackjackTable t : tableManager.getTables()) {
+                    if (t.getCenterLocation().getWorld() != null && t.getCenterLocation().getWorld().equals(player.getWorld())) {
+                        if (t.getCroupierNPC() != null) {
+                            t.getCroupierNPC().checkVisibility(player);
+                        }
+                    }
+                }
+            }, 1L);
         }
     }
 

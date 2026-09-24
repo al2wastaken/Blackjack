@@ -15,6 +15,7 @@ import com.vortex.blackjack.util.AsyncUtils;
 import com.vortex.blackjack.util.GenericUtils;
 import com.vortex.blackjack.util.VersionChecker;
 import org.bukkit.Location;
+import org.bukkit.World;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.file.FileConfiguration;
@@ -22,9 +23,13 @@ import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
+import org.bukkit.event.player.PlayerChangedWorldEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.world.ChunkLoadEvent;
+import org.bukkit.event.world.ChunkUnloadEvent;
+import org.bukkit.event.world.WorldLoadEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.util.StringUtil;
 
@@ -409,9 +414,14 @@ public class BlackjackPlugin extends JavaPlugin implements Listener {
             if (!player.isOnline() || tableManager == null) {
                 return;
             }
+            World world = player.getWorld();
             for (BlackjackTable table : tableManager.getTables()) {
-                if (table.getCroupierNPC() != null) {
-                    table.getCroupierNPC().checkVisibility(player);
+                if (table.getCenterLocation().getWorld() != null && table.getCenterLocation().getWorld().equals(world)) {
+                    table.ensureEntitiesExist();
+                    if (table.getCroupierNPC() != null) {
+                        table.getCroupierNPC().checkVisibility(player);
+                    }
+                    table.updateTableTextDisplayVisibility();
                 }
             }
         }, 1L);
@@ -465,6 +475,83 @@ public class BlackjackPlugin extends JavaPlugin implements Listener {
             }
         }
     }
+
+    @EventHandler
+    public void onPlayerChangedWorld(PlayerChangedWorldEvent event) {
+        Player player = event.getPlayer();
+        if (tableManager == null) return;
+
+        // If player was seated at a table in the previous world, remove them cleanly
+        tableManager.removePlayerFromTable(player, configManager.getLeaveReason("teleported"));
+
+        // Hide croupiers from previous world
+        World fromWorld = event.getFrom();
+        for (BlackjackTable table : tableManager.getTables()) {
+            if (table.getCenterLocation().getWorld() != null && table.getCenterLocation().getWorld().equals(fromWorld)) {
+                if (table.getCroupierNPC() != null) {
+                    table.getCroupierNPC().hide(player);
+                }
+            }
+        }
+
+        // For tables in the new world: ensure entities exist and check visibility
+        World toWorld = player.getWorld();
+        getServer().getScheduler().runTaskLater(this, () -> {
+            if (!player.isOnline() || tableManager == null) return;
+            for (BlackjackTable table : tableManager.getTables()) {
+                if (table.getCenterLocation().getWorld() != null && table.getCenterLocation().getWorld().equals(toWorld)) {
+                    table.ensureEntitiesExist();
+                    if (table.getCroupierNPC() != null) {
+                        table.getCroupierNPC().checkVisibility(player);
+                    }
+                    table.updateTableTextDisplayVisibility();
+                }
+            }
+        }, 1L);
+    }
+
+    @EventHandler
+    public void onChunkLoad(ChunkLoadEvent event) {
+        if (tableManager == null) return;
+        org.bukkit.Chunk chunk = event.getChunk();
+        for (BlackjackTable table : tableManager.getTables()) {
+            if (table.getCenterLocation().getWorld() != null &&
+                    table.getCenterLocation().getWorld().equals(chunk.getWorld()) &&
+                    table.containsChunk(chunk.getX(), chunk.getZ())) {
+                table.ensureEntitiesExist();
+            }
+        }
+    }
+
+    @EventHandler
+    public void onChunkUnload(ChunkUnloadEvent event) {
+        if (tableManager == null) return;
+        org.bukkit.Chunk chunk = event.getChunk();
+        for (BlackjackTable table : tableManager.getTables()) {
+            if (table.getCenterLocation().getWorld() != null &&
+                    table.getCenterLocation().getWorld().equals(chunk.getWorld()) &&
+                    table.containsChunk(chunk.getX(), chunk.getZ())) {
+                try {
+                    chunk.getWorld().addPluginChunkTicket(chunk.getX(), chunk.getZ(), this);
+                } catch (Exception ignored) {}
+                return;
+            }
+        }
+    }
+
+    @EventHandler
+    public void onWorldLoad(WorldLoadEvent event) {
+        if (tableManager == null) return;
+        World world = event.getWorld();
+        tableManager.loadTablesForWorld(world);
+        for (BlackjackTable table : tableManager.getTables()) {
+            if (table.getCenterLocation().getWorld() != null &&
+                    table.getCenterLocation().getWorld().equals(world)) {
+                table.addChunkTickets();
+                table.ensureEntitiesExist();
+            }
+        }
+    }
     
     @EventHandler
     public void onPlayerMove(PlayerMoveEvent event) {
@@ -493,6 +580,10 @@ public class BlackjackPlugin extends JavaPlugin implements Listener {
         if (tableManager != null) {
             BlackjackTable table = tableManager.getPlayerTable(player);
             if (table != null) {
+                if (!player.getWorld().equals(table.getCenterLocation().getWorld())) {
+                    table.removePlayer(player, configManager.getLeaveReason("moved-away"));
+                    return;
+                }
                 double distance = player.getLocation().distance(table.getCenterLocation());
                 double maxDistance = table.getSettings().getMaxJoinDistance(configManager);
                 
@@ -831,6 +922,13 @@ public class BlackjackPlugin extends JavaPlugin implements Listener {
         FileConfiguration messagesConfig = loadLanguageMessages();
         
         configManager.reload(getConfig(), messagesConfig);
+
+        if (tableManager != null) {
+            for (BlackjackTable table : tableManager.getTables()) {
+                table.ensureEntitiesExist();
+            }
+        }
+
         player.sendMessage(configManager.getMessage("config-reloaded"));
         return true;
     }

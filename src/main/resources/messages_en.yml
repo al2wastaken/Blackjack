@@ -287,10 +287,11 @@ table-display:
 
 # Table Hologram Rules
 hologram-rules:
-  line1: "&6&lBLACKJACK"
-  line2: "&7Dealer stands on 17 and hits on 16"
-  line3: "&eInstant 21 pays 2.5x"
-  line4: "&aRight click to join! &7(%players%/%capacity%)"
+  - "&6&lBLACKJACK"
+  - "&7Dealer stands on 17 and hits on 16"
+  - "&eInstant 21 pays 2.5x"
+  - ""
+  - "&aRight click to join! &7(%players%/%capacity%)"
 
 # Version Checker & Command
 version-info:

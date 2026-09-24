@@ -50,17 +50,18 @@ public class TableManager {
      * Normalizes a table location so that:
      * - X and Z are centered on the nearest block (+0.5)
      * - Y is the block level
-     * - Yaw is always 180.0f (facing North)
+     * - Yaw is snapped to the nearest 90-degree angle (0, 90, 180, 270)
      * - Pitch is always 0.0f (level)
      */
     public static Location normalizeLocation(Location loc) {
         if (loc == null || loc.getWorld() == null) return loc;
+        float snappedYaw = com.vortex.blackjack.util.GenericUtils.snapYawTo90(loc.getYaw());
         return new Location(
                 loc.getWorld(),
                 loc.getBlockX() + 0.5,
                 loc.getBlockY(),
                 loc.getBlockZ() + 0.5,
-                180.0f,
+                snappedYaw,
                 0.0f
         );
     }
@@ -110,7 +111,11 @@ public class TableManager {
                     int z = Integer.parseInt(parts[2]);
 
                     TableSettings settings = loadSettingsFromConfig(worldSection, locString);
-                    Location loc = new Location(world, x + 0.5, y, z + 0.5, 180.0f, 0.0f);
+                    float yaw = 0.0f;
+                    if (worldSection.isConfigurationSection(locString)) {
+                        yaw = (float) worldSection.getConfigurationSection(locString).getDouble("yaw", 0.0);
+                    }
+                    Location loc = new Location(world, x + 0.5, y, z + 0.5, yaw, 0.0f);
                     createTable(loc, settings, false); // Don't save to config again
                 } catch (NumberFormatException e) {
                     plugin.getLogger().warning("Invalid table location format: " + locString);
@@ -343,18 +348,11 @@ public class TableManager {
         }
 
         String path = buildTablePath(loc);
-        if (settings.getRawMinBet() == null && settings.getRawMaxBet() == null
-                && settings.getRawMaxPlayers() == null
-                && settings.getRawMaxJoinDistance() == null) {
-            // No overrides — use compact boolean form
-            plugin.getConfig().set(path, true);
-        } else {
-            // Store sub-keys; null values are omitted (Bukkit skips null sets)
-            plugin.getConfig().set(path + ".min-bet",           settings.getRawMinBet());
-            plugin.getConfig().set(path + ".max-bet",           settings.getRawMaxBet());
-            plugin.getConfig().set(path + ".max-players",       settings.getRawMaxPlayers());
-            plugin.getConfig().set(path + ".max-join-distance", settings.getRawMaxJoinDistance());
-        }
+        plugin.getConfig().set(path + ".yaw",               (double) loc.getYaw());
+        plugin.getConfig().set(path + ".min-bet",           settings.getRawMinBet());
+        plugin.getConfig().set(path + ".max-bet",           settings.getRawMaxBet());
+        plugin.getConfig().set(path + ".max-players",       settings.getRawMaxPlayers());
+        plugin.getConfig().set(path + ".max-join-distance", settings.getRawMaxJoinDistance());
         plugin.saveConfig();
     }
 
@@ -372,5 +370,93 @@ public class TableManager {
         Integer maxP     = sec.contains("max-players")       ? sec.getInt("max-players")          : null;
         Double  maxDist  = sec.contains("max-join-distance") ? sec.getDouble("max-join-distance") : null;
         return new TableSettings(minBet, maxBet, maxP, maxDist);
+    }
+
+    /**
+     * Safely removes plugin chunk tickets for a table, unless another table still occupies the chunk.
+     */
+    public void removeChunkTicketsForTable(BlackjackTable table) {
+        if (table == null) return;
+        Location centerLoc = table.getCenterLocation();
+        World world = centerLoc.getWorld();
+        if (world == null) return;
+
+        int minChunkX = (centerLoc.getBlockX() - 4) >> 4;
+        int maxChunkX = (centerLoc.getBlockX() + 4) >> 4;
+        int minChunkZ = (centerLoc.getBlockZ() - 4) >> 4;
+        int maxChunkZ = (centerLoc.getBlockZ() + 4) >> 4;
+
+        for (int cx = minChunkX; cx <= maxChunkX; cx++) {
+            for (int cz = minChunkZ; cz <= maxChunkZ; cz++) {
+                boolean chunkShared = false;
+                for (BlackjackTable other : tables.values()) {
+                    if (other != table && other.getCenterLocation().getWorld() != null &&
+                            other.getCenterLocation().getWorld().equals(world) &&
+                            other.containsChunk(cx, cz)) {
+                        chunkShared = true;
+                        break;
+                    }
+                }
+                if (!chunkShared) {
+                    try {
+                        world.removePluginChunkTicket(cx, cz, plugin);
+                    } catch (Exception ignored) {}
+                }
+            }
+        }
+    }
+
+    /**
+     * Loads tables for a specific world if they weren't loaded yet (e.g. dynamic Multiverse world load).
+     */
+    public void loadTablesForWorld(World world) {
+        if (world == null) return;
+        String worldName = world.getName();
+
+        // Check if tables already loaded for this world
+        for (Location loc : tables.keySet()) {
+            if (loc.getWorld() != null && loc.getWorld().equals(world)) {
+                return;
+            }
+        }
+
+        if (plugin.getDatabaseManager() != null) {
+            List<com.vortex.blackjack.database.TableRecord> dbTables = plugin.getDatabaseManager().loadAllTables();
+            for (com.vortex.blackjack.database.TableRecord record : dbTables) {
+                if (worldName.equals(record.getWorld())) {
+                    Location loc = record.toLocation();
+                    if (loc != null) {
+                        createTable(loc, record.toTableSettings(), false);
+                    }
+                }
+            }
+            return;
+        }
+
+        if (plugin.getConfig().contains("tables." + worldName)) {
+            ConfigurationSection worldSection = plugin.getConfig().getConfigurationSection("tables." + worldName);
+            if (worldSection != null) {
+                for (String locString : worldSection.getKeys(false)) {
+                    try {
+                        String[] parts = locString.split("_");
+                        if (parts.length != 3) continue;
+
+                        int x = Integer.parseInt(parts[0]);
+                        int y = Integer.parseInt(parts[1]);
+                        int z = Integer.parseInt(parts[2]);
+
+                        TableSettings settings = loadSettingsFromConfig(worldSection, locString);
+                        float yaw = 0.0f;
+                        if (worldSection.isConfigurationSection(locString)) {
+                            yaw = (float) worldSection.getConfigurationSection(locString).getDouble("yaw", 0.0);
+                        }
+                        Location loc = new Location(world, x + 0.5, y, z + 0.5, yaw, 0.0f);
+                        createTable(loc, settings, false);
+                    } catch (NumberFormatException e) {
+                        plugin.getLogger().warning("Invalid table location format: " + locString);
+                    }
+                }
+            }
+        }
     }
 }

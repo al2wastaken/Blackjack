@@ -176,4 +176,32 @@ public class GenericUtils {
         }
         return (Player) sender;
     }
+
+    /**
+     * Snaps a yaw angle to the nearest 90-degree cardinal direction:
+     * 0.0 (South, +Z), 90.0 (West, -X), 180.0 (North, -Z), 270.0 (East, +X).
+     */
+    public static float snapYawTo90(float yaw) {
+        float normalized = (yaw % 360.0f + 360.0f) % 360.0f;
+        return (Math.round(normalized / 90.0f) * 90.0f) % 360.0f;
+    }
+
+    /**
+     * Rotates a local 3D offset vector around the vertical (Y) axis by the given yaw degrees
+     * according to Minecraft coordinate standards.
+     */
+    public static org.bukkit.util.Vector rotateOffset(org.bukkit.util.Vector vector, float yawDegrees) {
+        double yaw = Math.toRadians(-yawDegrees);
+        double cos = Math.cos(yaw);
+        double sin = Math.sin(yaw);
+
+        double initialX = vector.getX();
+        double initialY = vector.getY();
+        double initialZ = vector.getZ();
+
+        double x = initialZ * sin + initialX * cos;
+        double z = initialZ * cos - initialX * sin;
+
+        return new org.bukkit.util.Vector(x, initialY, z);
+    }
 }

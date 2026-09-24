@@ -38,6 +38,7 @@ public class ConfigManager {
     private Sound chairSitSound;
     private boolean tableHologramEnabled;
     private String tableHologramTitle;
+    private double tableHologramYOffset = 1.85;
     private String currencySymbol;
     
     public ConfigManager(FileConfiguration config, FileConfiguration messagesConfig) {
@@ -85,12 +86,19 @@ public class ConfigManager {
         try {
             chairSitSound = Sound.valueOf(sitSoundStr);
         } catch (IllegalArgumentException e) {
-            chairSitSound = Sound.BLOCK_WOODEN_TRAPDOOR_CLOSE;
+            try {
+                chairSitSound = Sound.BLOCK_WOODEN_TRAPDOOR_CLOSE;
+            } catch (Throwable ignored) {
+                chairSitSound = null;
+            }
+        } catch (Throwable e) {
+            chairSitSound = null;
         }
 
         tableHologramEnabled = config.getBoolean("table.hologram.enabled", true);
         tableHologramTitle = ChatColor.translateAlternateColorCodes('&', 
                 config.getString("table.hologram.title", "&6&lBLACKJACK"));
+        tableHologramYOffset = config.getDouble("table.hologram.y-offset", 1.85);
         
         // Audio/visual settings
         soundsEnabled = config.getBoolean("sounds.enabled", true);
@@ -158,6 +166,10 @@ public class ConfigManager {
 
     public String getTableHologramTitle() {
         return tableHologramTitle;
+    }
+
+    public double getTableHologramYOffset() {
+        return tableHologramYOffset;
     }
     
     public boolean areSoundsEnabled() { return soundsEnabled; }
@@ -410,12 +422,30 @@ public class ConfigManager {
     }
 
     public List<String> getHologramRules(int currentPlayers, int capacity) {
-        List<String> lines = new ArrayList<>();
-        lines.add(formatMessage("hologram-rules.line1"));
-        lines.add(formatMessage("hologram-rules.line2"));
-        lines.add(formatMessage("hologram-rules.line3"));
-        lines.add(formatMessage("hologram-rules.line4", "players", currentPlayers, "capacity", capacity));
-        return lines;
+        if (messagesConfig.isList("hologram-rules")) {
+            return formatMessageList("hologram-rules", Collections.emptyList(),
+                    "players", currentPlayers, "capacity", capacity);
+        }
+
+        // Backward compatibility fallback for legacy section dictionary format (line1, line2, ...)
+        if (messagesConfig.isConfigurationSection("hologram-rules")) {
+            List<String> lines = new ArrayList<>();
+            org.bukkit.configuration.ConfigurationSection sec = messagesConfig.getConfigurationSection("hologram-rules");
+            if (sec != null) {
+                for (String key : sec.getKeys(false)) {
+                    lines.add(formatMessage("hologram-rules." + key, "players", currentPlayers, "capacity", capacity));
+                }
+            }
+            return lines;
+        }
+
+        return formatMessageList("hologram-rules", List.of(
+                "&6&lBLACKJACK",
+                "&7Krupiye 17'de durur ve 16'da kart çeker",
+                "&eAnında 21, 2.5x ödeme yapar",
+                "",
+                "&aKatılmak için sağ tıkla! &7(%players%/%capacity%)"
+        ), "players", currentPlayers, "capacity", capacity);
     }
 
     public List<String> getAdminVersionNotification(String current, String latest, String downloadUrl) {

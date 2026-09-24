@@ -407,10 +407,11 @@ table-display:
 
 # Table Hologram Rules
 hologram-rules:
-  line1: "&6&lBLACKJACK"
-  line2: "&7Krupiye 17'de durur ve 16'da kart çeker"
-  line3: "&eAnında 21, 2.5x ödeme yapar"
-  line4: "&aKatılmak için sağ tıkla! &7(%players%/%capacity%)"
+  - "&6&lBLACKJACK"
+  - "&7Krupiye 17'de durur ve 16'da kart çeker"
+  - "&eAnında 21, 2.5x ödeme yapar"
+  - ""
+  - "&aKatılmak için sağ tıkla! &7(%players%/%capacity%)"
 
 # Version Checker & Command
 version-info:

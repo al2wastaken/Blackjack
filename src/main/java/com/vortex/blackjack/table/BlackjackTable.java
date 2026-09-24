@@ -131,14 +131,20 @@ public class BlackjackTable {
         // 2. Initialize 4 physical chairs matching the user's casino blueprint
         initChairs();
 
-        // 3. Initialize PacketEvents Croupier NPC at (x=0, z=-1.8, yaw=0)
-        Location croupierLoc = centerLoc.clone().add(0, 0, -1.8);
-        croupierLoc.setYaw(0.0f);
+        // 3. Initialize PacketEvents Croupier NPC at (x=0, z=-1.8) rotated by table yaw
+        float tableYaw = this.centerLoc.getYaw();
+        org.bukkit.util.Vector croupierOffset = com.vortex.blackjack.util.GenericUtils.rotateOffset(
+                new org.bukkit.util.Vector(0, 0, -1.8), tableYaw);
+        Location croupierLoc = centerLoc.clone().add(croupierOffset);
+        croupierLoc.setYaw(tableYaw);
         croupierLoc.setPitch(0.0f);
         String skinTexture = CroupierSkin.getPresetOrDefault(settings.getCroupierSkin());
         this.croupierNPC = new CroupierNPC(plugin, this, croupierLoc, skinTexture);
         updateCroupierIdleDisplay();
         this.croupierNPC.updateAllNearby();
+
+        // 4. Keep table chunks loaded via plugin chunk ticket
+        addChunkTickets();
     }
 
     public TableSettings getSettings() {
@@ -166,19 +172,26 @@ public class BlackjackTable {
         }
         chairs.clear();
 
-        double tableX = centerLoc.getX();
-        double tableY = centerLoc.getY();
-        double tableZ = centerLoc.getZ();
+        // 4 Chairs matching the 5x3 chamfered casino layout, rotated by tableYaw
+        float tableYaw = centerLoc.getYaw();
+        double[][] seatDefs = {
+                {-2.3, 1.4, 135.0},
+                {-0.8, 2.0, 180.0},
+                { 0.8, 2.0, 180.0},
+                { 2.3, 1.4, 225.0}
+        };
 
-        // 4 Chairs matching the 5x3 chamfered casino layout:
-        // Seat 0: Left Angled corner (x=-2.3, z=1.4, yaw=135°)
-        chairs.add(new BlackjackChair(plugin, this, 0, new Location(centerLoc.getWorld(), tableX - 2.3, tableY, tableZ + 1.4), 135.0f));
-        // Seat 1: Front Left (x=-0.8, z=2.0, yaw=180°) - matches card pivot X (-0.8)
-        chairs.add(new BlackjackChair(plugin, this, 1, new Location(centerLoc.getWorld(), tableX - 0.8, tableY, tableZ + 2.0), 180.0f));
-        // Seat 2: Front Right (x=0.8, z=2.0, yaw=180°) - matches card pivot X (+0.8)
-        chairs.add(new BlackjackChair(plugin, this, 2, new Location(centerLoc.getWorld(), tableX + 0.8, tableY, tableZ + 2.0), 180.0f));
-        // Seat 3: Right Angled corner (x=2.3, z=1.4, yaw=225°)
-        chairs.add(new BlackjackChair(plugin, this, 3, new Location(centerLoc.getWorld(), tableX + 2.3, tableY, tableZ + 1.4), 225.0f));
+        for (int i = 0; i < seatDefs.length; i++) {
+            double localX = seatDefs[i][0];
+            double localZ = seatDefs[i][1];
+            float localYaw = (float) seatDefs[i][2];
+
+            org.bukkit.util.Vector rotOffset = com.vortex.blackjack.util.GenericUtils.rotateOffset(
+                    new org.bukkit.util.Vector(localX, 0.0, localZ), tableYaw);
+            Location chairLoc = centerLoc.clone().add(rotOffset);
+            float chairYaw = (localYaw + tableYaw) % 360.0f;
+            chairs.add(new BlackjackChair(plugin, this, i, chairLoc, chairYaw));
+        }
 
         for (BlackjackChair chair : chairs) {
             chair.spawn(configManager.getWoodPlanks(), configManager.getWoodSlab(), configManager.getChairCushionMaterial());
@@ -336,6 +349,8 @@ public class BlackjackTable {
                 if (croupierNPC != null) {
                     croupierNPC.show(player);
                 }
+
+                hideTableTextDisplay(player);
                 
                 broadcastTableMessage(configManager.formatMessage("player-joined-table", "player", player.getName()));
                 updateCroupierIdleDisplay();
@@ -408,6 +423,9 @@ public class BlackjackTable {
                 SignGUI.clear(player);
             }
             players.remove(player);
+            if (player.isOnline()) {
+                showTableTextDisplay(player);
+            }
             removeTurnBossBar(player);
             if (!gameInProgress && !settlingResults) {
                 updateCroupierIdleDisplay();
@@ -1004,11 +1022,35 @@ public class BlackjackTable {
         updateCroupierIdleDisplay();
     }
 
-    private void updateCroupierIdleDisplay() {
+    public void updateCroupierIdleDisplay() {
         if (croupierNPC == null) return;
         int capacity = chairs.isEmpty() ? 4 : chairs.size();
         List<String> rules = configManager.getHologramRules(players.size(), capacity);
-        croupierNPC.updateScoreDisplay(String.join("\n", rules.get(0), rules.get(1), rules.get(2), "", rules.get(3)));
+        croupierNPC.updateScoreDisplay(String.join("\n", rules));
+    }
+
+    public void hideTableTextDisplay(Player player) {
+        if (player == null || !player.isOnline()) return;
+        if (croupierNPC != null && croupierNPC.getScoreDisplay() != null) {
+            player.hideEntity(plugin, croupierNPC.getScoreDisplay());
+        }
+    }
+
+    public void showTableTextDisplay(Player player) {
+        if (player == null || !player.isOnline()) return;
+        if (croupierNPC != null && croupierNPC.getScoreDisplay() != null) {
+            player.showEntity(plugin, croupierNPC.getScoreDisplay());
+        }
+    }
+
+    public void updateTableTextDisplayVisibility() {
+        if (croupierNPC == null || croupierNPC.getScoreDisplay() == null) return;
+        TextDisplay display = croupierNPC.getScoreDisplay();
+        for (Player seated : players) {
+            if (seated != null && seated.isOnline()) {
+                seated.hideEntity(plugin, display);
+            }
+        }
     }
     
     private void handlePayout(Player player, int dealerValue) {
@@ -1150,18 +1192,18 @@ public class BlackjackTable {
             loc.setY(centerLoc.getY());
             return loc;
         }
-        switch (seatNumber) {
-            case 0:
-                return centerLoc.clone().add(1.8, 0.0, 0.0);
-            case 1:
-                return centerLoc.clone().add(0.0, 0.0, 1.8);
-            case 2:
-                return centerLoc.clone().add(-1.8, 0.0, 0.0);
-            case 3:
-                return centerLoc.clone().add(0.0, 0.0, -1.8);
-            default:
-                return null;
+        float tableYaw = centerLoc.getYaw();
+        org.bukkit.util.Vector fallback = switch (seatNumber) {
+            case 0 -> new org.bukkit.util.Vector( 1.8, 0.0,  0.0);
+            case 1 -> new org.bukkit.util.Vector( 0.0, 0.0,  1.8);
+            case 2 -> new org.bukkit.util.Vector(-1.8, 0.0,  0.0);
+            case 3 -> new org.bukkit.util.Vector( 0.0, 0.0, -1.8);
+            default -> null;
+        };
+        if (fallback != null) {
+            return centerLoc.clone().add(com.vortex.blackjack.util.GenericUtils.rotateOffset(fallback, tableYaw));
         }
+        return null;
     }
     
     private Transformation createCardTransformation(boolean isDealer, int seatNumber) {
@@ -1193,6 +1235,8 @@ public class BlackjackTable {
     private ItemDisplay createCardDisplay(Location loc, Card card, boolean isDealer, int seatNumber) {
         World world = loc.getWorld();
         Location displayLoc = loc.clone();
+        displayLoc.setYaw(centerLoc.getYaw());
+        displayLoc.setPitch(0.0f);
         return world.spawn(displayLoc, ItemDisplay.class, display -> {
             if (card != null) {
                 String cardIdentifier = card.getCardIdentifier();
@@ -1350,7 +1394,7 @@ public class BlackjackTable {
         }
     }
 
-    private String getTableDisplayTag() {
+    public String getTableDisplayTag() {
         return "blackjack-table:" + centerLoc.getWorld().getName() + ":" + centerLoc.getBlockX() + ":" + centerLoc.getBlockY() + ":" + centerLoc.getBlockZ();
     }
 
@@ -1365,26 +1409,55 @@ public class BlackjackTable {
             return;
         }
 
-        String tableTag = getTableDisplayTag();
-        for (Entity entity : centerLoc.getWorld().getNearbyEntities(centerLoc, 8.0, 4.0, 8.0, entity ->
-            entity.getScoreboardTags().contains("blackjack-card") &&
-            entity.getScoreboardTags().contains(tableTag))) {
+        String tableTagColon = getTableDisplayTag();
+        String tableTagUnderscore = "blackjack-table:" + tableId;
+        for (Entity entity : centerLoc.getWorld().getNearbyEntities(centerLoc, 5.0, 3.0, 5.0, entity -> {
+            Set<String> tags = entity.getScoreboardTags();
+            return (tags.contains(tableTagColon) || tags.contains(tableTagUnderscore)) &&
+                    (tags.contains("blackjack-card") ||
+                     tags.contains("blackjack-croupier-text") ||
+                     tags.contains("blackjack-hologram"));
+        })) {
+            entity.remove();
+        }
+    }
+
+    private void purgeAllTableEntities() {
+        if (centerLoc.getWorld() == null) {
+            return;
+        }
+
+        String tableTagColon = getTableDisplayTag();
+        String tableTagUnderscore = "blackjack-table:" + tableId;
+        for (Entity entity : centerLoc.getWorld().getNearbyEntities(centerLoc, 5.0, 3.0, 5.0, entity -> {
+            Set<String> tags = entity.getScoreboardTags();
+            return (tags.contains(tableTagColon) || tags.contains(tableTagUnderscore)) &&
+                    (tags.contains("blackjack-card") ||
+                     tags.contains("blackjack-croupier-text") ||
+                     tags.contains("blackjack-hologram") ||
+                     tags.contains("blackjack-table-model") ||
+                     tags.contains("blackjack-table-hitbox") ||
+                     tags.contains("blackjack-chair-visual") ||
+                     tags.contains("blackjack-seat"));
+        })) {
             entity.remove();
         }
     }
     
     public Location getPlayerCardBaseLocation(int seatNumber) {
-        double tableX = centerLoc.getX();
-        double tableY = centerLoc.getY() + CARD_SURFACE_Y_OFFSET;
-        double tableZ = centerLoc.getZ();
-        return switch (seatNumber) {
+        org.bukkit.util.Vector localOffset = switch (seatNumber) {
             // Pull corner groups diagonally toward the upper table edge.
-            case 0 -> new Location(centerLoc.getWorld(), tableX - 1.90, tableY, tableZ + 0.55);
-            case 1 -> new Location(centerLoc.getWorld(), tableX - 0.8, tableY, tableZ + 1.05);
-            case 2 -> new Location(centerLoc.getWorld(), tableX + 0.8, tableY, tableZ + 1.05);
-            case 3 -> new Location(centerLoc.getWorld(), tableX + 1.90, tableY, tableZ + 0.55);
-            default -> new Location(centerLoc.getWorld(), tableX, tableY, tableZ + 1.05);
+            case 0 -> new org.bukkit.util.Vector(-1.90, CARD_SURFACE_Y_OFFSET, 0.55);
+            case 1 -> new org.bukkit.util.Vector(-0.80, CARD_SURFACE_Y_OFFSET, 1.05);
+            case 2 -> new org.bukkit.util.Vector( 0.80, CARD_SURFACE_Y_OFFSET, 1.05);
+            case 3 -> new org.bukkit.util.Vector( 1.90, CARD_SURFACE_Y_OFFSET, 0.55);
+            default -> new org.bukkit.util.Vector(0.00, CARD_SURFACE_Y_OFFSET, 1.05);
         };
+        org.bukkit.util.Vector rotated = com.vortex.blackjack.util.GenericUtils.rotateOffset(localOffset, centerLoc.getYaw());
+        Location loc = centerLoc.clone().add(rotated);
+        loc.setYaw(centerLoc.getYaw());
+        loc.setPitch(0.0f);
+        return loc;
     }
 
     private void updateCardDisplays(Player player, List<Card> hand) {
@@ -1411,8 +1484,12 @@ public class BlackjackTable {
         for (int i = 0; i < hand.size(); i++) {
             Card card = hand.get(i);
             double offset = startOffset + i * PLAYER_CARD_SPACING;
-            Location spawnLoc = baseLoc.clone().add(
+            org.bukkit.util.Vector localSpread = new org.bukkit.util.Vector(
                     offset * Math.cos(rotation), 0, offset * Math.sin(rotation));
+            org.bukkit.util.Vector worldSpread = com.vortex.blackjack.util.GenericUtils.rotateOffset(
+                    localSpread, centerLoc.getYaw());
+            Location spawnLoc = baseLoc.clone().add(worldSpread);
+            spawnLoc.setYaw(centerLoc.getYaw());
 
             ItemDisplay display = createCardDisplay(spawnLoc, card, false, seatNumber);
             playerCardDisplays.get(player).add(display);
@@ -1487,14 +1564,17 @@ public class BlackjackTable {
             return;
         }
 
-        Location baseDisplayLoc = centerLoc.clone().add(0, CARD_SURFACE_Y_OFFSET, -0.6);
         double cardSpacing = 0.30;
         double startX = -((dealerHand.size() - 1) * cardSpacing) / 2.0;
 
         for (int i = 0; i < dealerHand.size(); i++) {
             Card card = dealerHand.get(i);
             Card displayCard = (gameInProgress && !settlingResults && i > 0) ? null : card;
-            Location spawnLoc = baseDisplayLoc.clone().add(startX + (i * cardSpacing), 0, 0);
+            double localX = startX + (i * cardSpacing);
+            org.bukkit.util.Vector localOffset = new org.bukkit.util.Vector(localX, CARD_SURFACE_Y_OFFSET, -0.6);
+            org.bukkit.util.Vector rotOffset = com.vortex.blackjack.util.GenericUtils.rotateOffset(localOffset, centerLoc.getYaw());
+            Location spawnLoc = centerLoc.clone().add(rotOffset);
+            spawnLoc.setYaw(centerLoc.getYaw());
             ItemDisplay display = createCardDisplay(spawnLoc, displayCard, true, 2);
             dealerCardDisplays.add(display);
         }
@@ -1550,9 +1630,126 @@ public class BlackjackTable {
     }
 
     /**
+     * Keeps table chunks loaded so non-persistent displays/chairs do not despawn
+     * when all players leave the world.
+     */
+    public void addChunkTickets() {
+        World world = centerLoc.getWorld();
+        if (world == null) return;
+        int minChunkX = (centerLoc.getBlockX() - 4) >> 4;
+        int maxChunkX = (centerLoc.getBlockX() + 4) >> 4;
+        int minChunkZ = (centerLoc.getBlockZ() - 4) >> 4;
+        int maxChunkZ = (centerLoc.getBlockZ() + 4) >> 4;
+
+        for (int cx = minChunkX; cx <= maxChunkX; cx++) {
+            for (int cz = minChunkZ; cz <= maxChunkZ; cz++) {
+                try {
+                    world.getChunkAt(cx, cz).load();
+                    world.addPluginChunkTicket(cx, cz, plugin);
+                } catch (Exception ignored) {}
+            }
+        }
+    }
+
+    /**
+     * Removes chunk tickets when table is cleaned up.
+     */
+    public void removeChunkTickets() {
+        tableManager.removeChunkTicketsForTable(this);
+    }
+
+    /**
+     * Checks if this table spans into the specified chunk coordinates.
+     */
+    public boolean containsChunk(int cx, int cz) {
+        int minChunkX = (centerLoc.getBlockX() - 4) >> 4;
+        int maxChunkX = (centerLoc.getBlockX() + 4) >> 4;
+        int minChunkZ = (centerLoc.getBlockZ() - 4) >> 4;
+        int maxChunkZ = (centerLoc.getBlockZ() + 4) >> 4;
+        return cx >= minChunkX && cx <= maxChunkX && cz >= minChunkZ && cz <= maxChunkZ;
+    }
+
+    /**
+     * Checks if all table model entities, chairs, and croupier score display are alive and valid.
+     */
+    public boolean areEntitiesValid() {
+        if (centerLoc.getWorld() == null) return false;
+        if (tableModel == null || tableModel.getTableInteraction() == null ||
+                !tableModel.getTableInteraction().isValid() || tableModel.getTableInteraction().isDead()) {
+            return false;
+        }
+        if (tableModel.getModelEntities().isEmpty()) {
+            return false;
+        }
+        for (Entity e : tableModel.getModelEntities()) {
+            if (e == null || !e.isValid() || e.isDead()) {
+                return false;
+            }
+        }
+        if (chairs.isEmpty()) {
+            return false;
+        }
+        for (BlackjackChair chair : chairs) {
+            if (chair.getSeatStand() == null || !chair.getSeatStand().isValid() || chair.getSeatStand().isDead()) {
+                return false;
+            }
+            if (chair.getAllEntities().isEmpty()) {
+                return false;
+            }
+            for (Entity e : chair.getAllEntities()) {
+                if (e == null || !e.isValid() || e.isDead()) {
+                    return false;
+                }
+            }
+        }
+        if (croupierNPC != null) {
+            TextDisplay scoreDisplay = croupierNPC.getScoreDisplay();
+            if (scoreDisplay == null || !scoreDisplay.isValid() || scoreDisplay.isDead()) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Ensures all table components (block displays, chairs, score display) exist and are alive.
+     * Heals and respawns any missing or despawned entities automatically.
+     */
+    public void ensureEntitiesExist() {
+        World world = centerLoc.getWorld();
+        if (world == null) return;
+
+        addChunkTickets();
+
+        if (areEntitiesValid()) {
+            return;
+        }
+
+        // Clean any dead or orphaned entities in the table area before respawning
+        purgeAllTableEntities();
+
+        // 1. Respawn table model
+        Material felt = settings.getFeltMaterial();
+        this.tableModel.spawn(configManager.getWoodPlanks(), configManager.getWoodSlab(), felt != null ? felt : configManager.getFeltMaterial());
+
+        // 2. Respawn chairs
+        initChairs();
+
+        // 3. Respawn croupier score display & refresh nearby visibility
+        if (croupierNPC != null) {
+            croupierNPC.spawnScoreDisplay();
+            updateCroupierIdleDisplay();
+            croupierNPC.updateAllNearby();
+        }
+
+        updateTableTextDisplayVisibility();
+    }
+
+    /**
      * Cleanup all resources for this table
      */
     public void cleanup() {
+        removeChunkTickets();
         cancelTurnTimeout();
         clearTurnBossBars();
         if (croupierNPC != null) {
@@ -1566,7 +1763,7 @@ public class BlackjackTable {
             chair.destroy();
         }
         chairs.clear();
-        purgeTrackedDisplays();
+        purgeAllTableEntities();
         clearAllDisplays();
         players.clear();
         playerHands.clear();

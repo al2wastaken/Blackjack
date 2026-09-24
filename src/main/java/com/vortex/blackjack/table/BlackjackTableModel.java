@@ -78,8 +78,7 @@ public class BlackjackTableModel {
 
     private BlockDisplay spawnPart(World world, Material material, Transformation transformation, String tableTag) {
         Location origin = centerLocation.clone();
-        // Saved locations have yaw 180, but these parts already use world axes.
-        origin.setYaw(0.0f);
+        origin.setYaw(centerLocation.getYaw());
         origin.setPitch(0.0f);
         BlockDisplay display = world.spawn(origin, BlockDisplay.class, part -> {
             part.setBlock(material.createBlockData());

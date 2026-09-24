@@ -83,6 +83,8 @@ table:
   hologram:
     enabled: true
     title: "&6&lBLACKJACK"
+    # Height offset above table center (default: 1.85)
+    y-offset: 1.85
   # Chair sounds
   sounds:
     sit: BLOCK_WOODEN_TRAPDOOR_CLOSE

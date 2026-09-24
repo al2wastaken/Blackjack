@@ -110,13 +110,20 @@ public class CroupierNPC {
     }
 
     /**
-     * Spawns the floating TextDisplay above croupier's head.
+     * Spawns the floating TextDisplay centered above the table.
      */
-    private void spawnScoreDisplay() {
-        World world = location.getWorld();
+    public void spawnScoreDisplay() {
+        if (scoreDisplay != null && !scoreDisplay.isDead()) {
+            scoreDisplay.remove();
+            scoreDisplay = null;
+        }
+
+        Location center = table != null ? table.getCenterLocation() : null;
+        World world = center != null && center.getWorld() != null ? center.getWorld() : location.getWorld();
         if (world == null) return;
 
-        Location displayLoc = location.clone().add(0, 2.15, 0);
+        double yOffset = plugin.getConfigManager().getTableHologramYOffset();
+        Location displayLoc = (center != null ? center : location).clone().add(0, yOffset, 0);
         scoreDisplay = world.spawn(displayLoc, TextDisplay.class, display -> {
             display.setBillboard(Display.Billboard.CENTER);
             display.setAlignment(TextDisplay.TextAlignment.CENTER);
@@ -127,16 +134,38 @@ public class CroupierNPC {
             display.setText(plugin.getConfigManager().getCroupierDisplayName());
             display.addScoreboardTag("blackjack-entity");
             display.addScoreboardTag("blackjack-croupier-text");
-            display.addScoreboardTag("blackjack-table:" + table.getTableId());
+            display.addScoreboardTag("blackjack-hologram");
+            if (table != null) {
+                display.addScoreboardTag("blackjack-table:" + table.getTableId());
+            }
         });
+        if (table != null) {
+            table.updateTableTextDisplayVisibility();
+        }
+    }
+
+    public void ensureScoreDisplayExists() {
+        if (scoreDisplay == null || !scoreDisplay.isValid() || scoreDisplay.isDead()) {
+            spawnScoreDisplay();
+        }
+    }
+
+    public TextDisplay getScoreDisplay() {
+        return scoreDisplay;
     }
 
     /**
-     * Updates the text display above croupier's head.
+     * Updates the text display above the table.
      */
     public void updateScoreDisplay(String text) {
+        if (scoreDisplay == null || !scoreDisplay.isValid() || scoreDisplay.isDead()) {
+            spawnScoreDisplay();
+        }
         if (scoreDisplay != null && scoreDisplay.isValid()) {
             scoreDisplay.setText(text);
+            if (table != null) {
+                table.updateTableTextDisplayVisibility();
+            }
         }
     }
 
