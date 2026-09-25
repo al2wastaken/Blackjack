@@ -109,8 +109,40 @@ public class CroupierNPC {
         respawnForAll();
     }
 
+    public Location getTableCenterDisplayLocation() {
+        if (table != null && table.getCenterLocation() != null && table.getCenterLocation().getWorld() != null) {
+            double yOffset = plugin.getConfigManager().getTableHologramYOffset();
+            return table.getCenterLocation().clone().add(0, yOffset, 0);
+        }
+        return location.clone().add(0, 2.15, 0);
+    }
+
+    public Location getCroupierHeadDisplayLocation() {
+        return location.clone().add(0, 2.15, 0);
+    }
+
+    public Location getDesiredScoreDisplayLocation() {
+        if (table != null && !table.getPlayers().isEmpty()) {
+            return getCroupierHeadDisplayLocation();
+        }
+        return getTableCenterDisplayLocation();
+    }
+
+    public void updateScoreDisplayPosition() {
+        if (scoreDisplay == null || !scoreDisplay.isValid() || scoreDisplay.isDead()) {
+            spawnScoreDisplay();
+            return;
+        }
+        Location desired = getDesiredScoreDisplayLocation();
+        if (scoreDisplay.getWorld() != null && scoreDisplay.getWorld().equals(desired.getWorld())) {
+            if (scoreDisplay.getLocation().distanceSquared(desired) > 0.01) {
+                scoreDisplay.teleport(desired);
+            }
+        }
+    }
+
     /**
-     * Spawns the floating TextDisplay centered above the table.
+     * Spawns the floating TextDisplay: centered above table when empty, or above croupier's head when occupied.
      */
     public void spawnScoreDisplay() {
         if (scoreDisplay != null && !scoreDisplay.isDead()) {
@@ -118,12 +150,10 @@ public class CroupierNPC {
             scoreDisplay = null;
         }
 
-        Location center = table != null ? table.getCenterLocation() : null;
-        World world = center != null && center.getWorld() != null ? center.getWorld() : location.getWorld();
+        World world = location.getWorld();
         if (world == null) return;
 
-        double yOffset = plugin.getConfigManager().getTableHologramYOffset();
-        Location displayLoc = (center != null ? center : location).clone().add(0, yOffset, 0);
+        Location displayLoc = getDesiredScoreDisplayLocation();
         scoreDisplay = world.spawn(displayLoc, TextDisplay.class, display -> {
             display.setBillboard(Display.Billboard.CENTER);
             display.setAlignment(TextDisplay.TextAlignment.CENTER);
@@ -155,13 +185,14 @@ public class CroupierNPC {
     }
 
     /**
-     * Updates the text display above the table.
+     * Updates the text display and verifies its position (table center or croupier head).
      */
     public void updateScoreDisplay(String text) {
         if (scoreDisplay == null || !scoreDisplay.isValid() || scoreDisplay.isDead()) {
             spawnScoreDisplay();
         }
         if (scoreDisplay != null && scoreDisplay.isValid()) {
+            updateScoreDisplayPosition();
             scoreDisplay.setText(text);
             if (table != null) {
                 table.updateTableTextDisplayVisibility();

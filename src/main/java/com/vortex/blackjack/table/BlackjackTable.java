@@ -348,12 +348,15 @@ public class BlackjackTable {
 
                 if (croupierNPC != null) {
                     croupierNPC.show(player);
+                    croupierNPC.updateScoreDisplayPosition();
+                    if (!gameInProgress) {
+                        croupierNPC.updateScoreDisplay(configManager.getMessage("table-display.croupier-name"));
+                    }
                 }
 
-                hideTableTextDisplay(player);
+                showTableTextDisplay(player);
                 
                 broadcastTableMessage(configManager.formatMessage("player-joined-table", "player", player.getName()));
-                updateCroupierIdleDisplay();
 
                 // Immediately open BettingGUI for the newly seated player
                 Bukkit.getScheduler().runTaskLater(plugin, () -> {
@@ -428,7 +431,15 @@ public class BlackjackTable {
             }
             removeTurnBossBar(player);
             if (!gameInProgress && !settlingResults) {
-                updateCroupierIdleDisplay();
+                if (players.isEmpty()) {
+                    if (croupierNPC != null) {
+                        croupierNPC.updateScoreDisplayPosition();
+                    }
+                    updateCroupierIdleDisplay();
+                } else if (croupierNPC != null) {
+                    croupierNPC.updateScoreDisplayPosition();
+                    croupierNPC.updateScoreDisplay(configManager.getMessage("table-display.croupier-name"));
+                }
             }
             playerSeats.remove(player);
             playerHands.remove(player);
@@ -555,6 +566,10 @@ public class BlackjackTable {
             doubleDownPlayers.clear();
             roundBets.clear();
             closeBettingGUIsForAllPlayers();
+
+            if (croupierNPC != null) {
+                croupierNPC.updateScoreDisplay(configManager.getMessage("table-display.croupier-name"));
+            }
             
             // Prepare empty hands. The initial cards are then dealt one by one
             // so every card has a matching croupier animation and sound.
@@ -970,13 +985,22 @@ public class BlackjackTable {
             roundBets.clear();
             clearTurnBossBars();
 
-            updateCroupierIdleDisplay();
+            if (players.isEmpty()) {
+                if (croupierNPC != null) {
+                    croupierNPC.updateScoreDisplayPosition();
+                }
+                updateCroupierIdleDisplay();
+            }
 
             if (!players.isEmpty()) {
                 broadcastTableMessage(configManager.getMessage("game-ended"));
                 // Automatically prompt and start countdown for next round if players remain seated
                 Bukkit.getScheduler().runTaskLater(plugin, () -> {
                     if (!gameInProgress && !settlingResults && !players.isEmpty() && countdownTask == null) {
+                        if (croupierNPC != null) {
+                            croupierNPC.updateScoreDisplayPosition();
+                            croupierNPC.updateScoreDisplay(configManager.getMessage("table-display.croupier-name"));
+                        }
                         for (Player p : players) {
                             p.sendMessage(configManager.getMessage("table-events.round-preparing-hint"));
                             if (p.isOnline() && players.contains(p)) {
@@ -1019,6 +1043,9 @@ public class BlackjackTable {
     }
 
     private void resetCroupierLabel() {
+        if (croupierNPC != null) {
+            croupierNPC.updateScoreDisplayPosition();
+        }
         updateCroupierIdleDisplay();
     }
 
@@ -1026,14 +1053,12 @@ public class BlackjackTable {
         if (croupierNPC == null) return;
         int capacity = chairs.isEmpty() ? 4 : chairs.size();
         List<String> rules = configManager.getHologramRules(players.size(), capacity);
+        croupierNPC.updateScoreDisplayPosition();
         croupierNPC.updateScoreDisplay(String.join("\n", rules));
     }
 
     public void hideTableTextDisplay(Player player) {
-        if (player == null || !player.isOnline()) return;
-        if (croupierNPC != null && croupierNPC.getScoreDisplay() != null) {
-            player.hideEntity(plugin, croupierNPC.getScoreDisplay());
-        }
+        showTableTextDisplay(player);
     }
 
     public void showTableTextDisplay(Player player) {
@@ -1048,7 +1073,7 @@ public class BlackjackTable {
         TextDisplay display = croupierNPC.getScoreDisplay();
         for (Player seated : players) {
             if (seated != null && seated.isOnline()) {
-                seated.hideEntity(plugin, display);
+                seated.showEntity(plugin, display);
             }
         }
     }
@@ -1414,9 +1439,7 @@ public class BlackjackTable {
         for (Entity entity : centerLoc.getWorld().getNearbyEntities(centerLoc, 5.0, 3.0, 5.0, entity -> {
             Set<String> tags = entity.getScoreboardTags();
             return (tags.contains(tableTagColon) || tags.contains(tableTagUnderscore)) &&
-                    (tags.contains("blackjack-card") ||
-                     tags.contains("blackjack-croupier-text") ||
-                     tags.contains("blackjack-hologram"));
+                    tags.contains("blackjack-card");
         })) {
             entity.remove();
         }
@@ -1560,7 +1583,13 @@ public class BlackjackTable {
         dealerCardDisplays.clear();
 
         if (dealerHand.isEmpty()) {
-            updateCroupierIdleDisplay();
+            if (gameInProgress) {
+                if (croupierNPC != null) {
+                    croupierNPC.updateScoreDisplay(configManager.getMessage("table-display.croupier-name"));
+                }
+            } else {
+                updateCroupierIdleDisplay();
+            }
             return;
         }
 
@@ -1580,7 +1609,7 @@ public class BlackjackTable {
         }
 
         if (croupierNPC != null) {
-            if (gameInProgress && !settlingResults && dealerHand.size() >= 2) {
+            if (gameInProgress && !settlingResults && !dealerHand.isEmpty()) {
                 Card visibleCard = dealerHand.get(0);
                 croupierNPC.updateScoreDisplay(configManager.formatDealerScoreDisplay(visibleCard.getValue(), false, false, true));
             } else {
@@ -1738,7 +1767,14 @@ public class BlackjackTable {
         // 3. Respawn croupier score display & refresh nearby visibility
         if (croupierNPC != null) {
             croupierNPC.spawnScoreDisplay();
-            updateCroupierIdleDisplay();
+            croupierNPC.updateScoreDisplayPosition();
+            if (gameInProgress && !dealerHand.isEmpty()) {
+                updateDealerDisplays();
+            } else if (!players.isEmpty()) {
+                croupierNPC.updateScoreDisplay(configManager.getMessage("table-display.croupier-name"));
+            } else {
+                updateCroupierIdleDisplay();
+            }
             croupierNPC.updateAllNearby();
         }
 

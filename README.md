@@ -78,9 +78,9 @@ Available on **[Modrinth](https://modrinth.com/plugin/blackjack-3d)** and **[Git
   - [PhysicalEconomy](https://github.com)
 
 ### Installation Steps
-1. Download the latest `Blackjack-3.0.jar` from **[Modrinth](https://modrinth.com/plugin/blackjack-3d)** or **[GitHub Releases](https://github.com/al2wastaken/Blackjack/releases)**.
+1. Download the latest `Blackjack-3.1.jar` from **[Modrinth](https://modrinth.com/plugin/blackjack-3d)** or **[GitHub Releases](https://github.com/al2wastaken/Blackjack/releases)**.
 2. Ensure **Vault** and **PacketEvents** are in your server's `plugins` folder.
-3. Place `Blackjack-3.0.jar` into the `plugins/` folder.
+3. Place `Blackjack-3.1.jar` into the `plugins/` folder.
 4. Restart your Minecraft server.
 5. Edit `plugins/Blackjack/config.yml` to customize settings, then run `/bj reload`.
 
@@ -335,7 +335,7 @@ cd Blackjack
 # Compile and package with Maven
 mvn clean package
 ```
-The compiled, shaded JAR will be created in `target/Blackjack-3.0.jar`.
+The compiled, shaded JAR will be created in `target/Blackjack-3.1.jar`.
 
 ---
 
